@@ -8,28 +8,34 @@ if not exist %gitPath% (
     exit /b 1
 )
 
-set repoPath=%~dp0
-if exist "%~dp0orion_dashboard\.git" (
-    set repoPath="%~dp0orion_dashboard"
-)
-
-echo >>> Diretório do repositório: %repoPath%
-cd /d %repoPath%
-
-echo >>> Staging files (git add)
-%gitPath% add .
-
 set /p msg="Digite a mensagem do commit: "
 if "%msg%"=="" (
-    set msg="feat: painel customizacoes e automacao de push"
+    set msg="feat: atualizacao automatica do projeto"
 )
 
-echo >>> Committing files (git commit)
-%gitPath% commit -m "%msg%"
+rem --- Repositório do Dashboard ---
+if exist "%~dp0orion_dashboard\.git" (
+    echo =============================================
+    echo >>> Processando Dashboard (Oriontech)
+    echo =============================================
+    cd /d "%~dp0orion_dashboard"
+    %gitPath% add .
+    %gitPath% commit -m "%msg%"
+    %gitPath% push origin main
+    echo.
+)
 
-echo >>> Pushing to GitHub (git push)
-%gitPath% push origin main
+rem --- Repositório do Robô MT5 ---
+if exist "%~dp0.git" (
+    echo =============================================
+    echo >>> Processando Robô MT5 (Orion-MT5)
+    echo =============================================
+    cd /d "%~dp0"
+    %gitPath% add .
+    %gitPath% commit -m "%msg%"
+    %gitPath% push origin main
+    echo.
+)
 
-echo.
-echo >>> Envio concluído com sucesso!
+echo >>> Todos os envios concluidos com sucesso!
 pause

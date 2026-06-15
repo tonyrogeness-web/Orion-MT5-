@@ -1,5 +1,5 @@
 param (
-    [string]$CommitMessage = "feat: painel customizacoes e automacao de push"
+    [string]$CommitMessage
 )
 
 $gitPath = "C:\Users\tony\portable-git\cmd\git.exe"
@@ -9,29 +9,48 @@ if (-not (Test-Path $gitPath)) {
     exit 1
 }
 
-# Determina o diretório de trabalho correto
-$repoPath = $PSScriptRoot
-if (Test-Path "$PSScriptRoot\orion_dashboard\.git") {
-    $repoPath = "$PSScriptRoot\orion_dashboard"
-} elseif (Test-Path "$PSScriptRoot\.git") {
-    $repoPath = $PSScriptRoot
-} else {
-    Write-Warning "Diretório .git não encontrado no root nem em orion_dashboard. Executando no diretório atual."
+# Função auxiliar para fazer push em um repositório
+function Push-Repo {
+    param (
+        [string]$Path,
+        [string]$Name,
+        [string]$Msg
+    )
+    if (Test-Path "$Path\.git") {
+        Write-Host "=============================================" -ForegroundColor Magenta
+        Write-Host ">>> Processando repositório: $Name" -ForegroundColor Yellow
+        Write-Host ">>> Pasta: $Path" -ForegroundColor Gray
+        Write-Host "=============================================" -ForegroundColor Magenta
+        
+        Push-Location $Path
+        
+        Write-Host ">>> Executando git add..." -ForegroundColor Cyan
+        & $gitPath add .
+        
+        Write-Host ">>> Executando git commit..." -ForegroundColor Cyan
+        & $gitPath commit -m $Msg
+        
+        Write-Host ">>> Executando git push..." -ForegroundColor Cyan
+        & $gitPath push origin main
+        
+        Pop-Location
+        Write-Host ">>> Envio do $Name concluído!" -ForegroundColor Green
+        Write-Host ""
+    }
 }
 
-Write-Host ">>> Diretório do repositório: $repoPath" -ForegroundColor Yellow
+# Se não foi fornecido commit message, solicita ou usa default
+if (-not $CommitMessage) {
+    $CommitMessage = Read-Host "Digite a mensagem do commit [Pressione Enter para usar o padrão]"
+    if (-not $CommitMessage) {
+        $CommitMessage = "feat: atualização automática do projeto"
+    }
+}
 
-# Salva a localização atual e vai para o repositório
-Push-Location $repoPath
+# Executa para o Dashboard (se existir)
+Push-Repo -Path "$PSScriptRoot\orion_dashboard" -Name "Dashboard (Oriontech)" -Msg $CommitMessage
 
-Write-Host ">>> Executando git add..." -ForegroundColor Cyan
-& $gitPath add .
+# Executa para o Robô MT5 (se existir)
+Push-Repo -Path $PSScriptRoot -Name "Robô MT5 (Orion-MT5)" -Msg $CommitMessage
 
-Write-Host ">>> Executando git commit..." -ForegroundColor Cyan
-& $gitPath commit -m $CommitMessage
-
-Write-Host ">>> Executando git push..." -ForegroundColor Cyan
-& $gitPath push origin main
-
-Pop-Location
-Write-Host ">>> Envio concluído com sucesso!" -ForegroundColor Green
+Write-Host ">>> Todos os envios concluídos com sucesso!" -ForegroundColor Green
