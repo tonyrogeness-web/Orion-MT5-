@@ -1,0 +1,15 @@
+<USER_REQUEST>
+Valores não estão aparecendo você tem!! você me passou da ultima vez
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-09T10:10:53-03:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\tony\.gemini\antigravity-ide\scratch\Orion_U2_Hedge\Orion_Hedge.mq5 (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 4025
+Other open documents:
+- c:\Users\tony\.gemini\antigravity-ide\scratch\Orion_U2_Hedge\Orion_Hedge.mq5 (LANGUAGE_UNSPECIFIED)
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from Claude Sonnet 4.6 (Thinking) to Gemini 3.5 Flash (High). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

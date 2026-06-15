@@ -1,0 +1,58 @@
+<USER_REQUEST>
+Ainda continua no modo demo!!! Erro na imagem!!
+
+Segue bugs e erros para verificação. caso já tenha corrigidos algum bug ou erro abaixo desconsidere e corrija os que ainda precisam de correção!!!
+
+Varredura de Bugs — Orion Hedge v3.39
+Vou decompor a análise em camadas críticas.
+
+🔴 CRÍTICO (Risco de comportamento incorreto em produção)
+
+BUG #1 — FecharTudo() não reseta g_BuyZoneOrigin / g_SellZoneOrigin
+Localização: FecharTudo() e FecharLocal()
+Problema: Ao fechar tudo via pânico, as variáveis g_BuyZoneOrigin e g_SellZoneOrigin não são zeradas. Na próxima entrada após retomada, o ZoneCap vai calcular totalDist com base em uma origem de zona stale (sessão anterior), podendo bloquear recompras legítimas ou liberar recompras indevidas.
+Correção — adicionar no bloco de reset de ambas as funções:
+mql5g_BuyZoneOrigin  = 0;
+g_SellZoneOrigin = 0;
+g_BuyLoteInicial  = 0;
+g_SellLoteInicial = 0;
+
+BUG #2 — VerificarTrailingEquity() chamada duas vezes por tick
+Localização: OnTick() — linhas:
+mql5VerificarTrailingEquity();  // chamada 1
+...
+// OnTimer() também chama:
+VerificarTrailingEquity();  // chamada 2
+Problema: OnTick() chama VerificarTrailingEquity() diretamente. OnTimer() também chama. Dentro da função há lógica de transição de estado (g_TrailingActive, g_PeakProfit) que pode disparar FecharTudo() e depois tentar operar normalmente no mesmo tick antes do estado ser propagado, especialmente se g_BotPaused ainda não for true no momento da segunda execução no mesmo ciclo.
+Correção: Remover a chamada de VerificarTrailingEquity() de OnTick(), mantendo apenas no OnTimer(). A frequência de 1 segundo do timer é suficiente para essa proteção de patrimônio.
+mql5// OnTick() — REMOVER esta linha:
+VerificarTrailingEquity();
+
+BUG #3 — AtualizarLucroHoje() interrompe o HistorySelect principal em AtualizarHistoricoGlobal()
+Localização: AtualizarHistoricoGlobal():
+mql5AtualizarLucroHoje();          // faz HistorySelect interno
+HistorySelect(dtStartQuery, dtEnd
+<truncated 5731 bytes>
+, existe um loop manual deletando "btn_rep_" e "cfg_rep_" como "resíduos". Isso gera trabalho duplicado. Não é um bug funcional, mas indica redundância de limpeza.
+
+BUG #10 — g_BalanceMesInicio e g_MesAtual declarados mas nunca usados
+Localização: Declarações globais:
+mql5double   g_BalanceMesInicio = 0;
+int      g_MesAtual         = 0;
+Essas variáveis foram declaradas para rentabilidade mensal mas nunca são escritas nem lidas em nenhuma função do código. Geram confusão de manutenção.
+
+Resumo Executivo
+#SeveridadeÁreaImpacto1🔴 CRÍTICOZoneCap pós-pânicoBloqueio/liberação errônea de recompras2🔴 CRÍTICOVerificarTrailingEquityDouble-fire, risco de fechar e operar no mesmo ciclo3🔴 CRÍTICOCache histórico + LucroHojeg_HistLucroHoje desatualizado silenciosamente4🟡 MODERADOCalcNovoLoteDrift de lote em casos de reinício parcial5🟡 MODERADOFases DD pós-fechamentoLogs enganosos de "recuperação"6🟡 MODERADOFiltroAntiFacaBloqueio permanente em doji/baixa liquidez7🟡 MODERADOPublishGlobalFilterPropagação de estado inconsistente8🔵 MENORAnálise de mercadoGuard frágil a mudanças de constantes9🔵 MENORLimparConteudoPainelLimpeza duplicada desnecessária10🔵 MENORVariáveis globaisDead code
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-09T10:32:18-03:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\tony\.gemini\antigravity-ide\scratch\Orion_U2_Hedge\Orion_Hedge.mq5 (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 4027
+Other open documents:
+- c:\Users\tony\.gemini\antigravity-ide\scratch\Orion_U2_Hedge\Orion_Hedge.mq5 (LANGUAGE_UNSPECIFIED)
+- c:\Users\tony\.gemini\antigravity-ide\scratch\Orion_U2_Hedge\orion_dashboard\src\components\Header.tsx (LANGUAGE_TSX)
+- c:\Users\tony\.gemini\antigravity-ide\scratch\Orion_U2_Hedge\orion_dashboard\src\components\TradesTable.tsx (LANGUAGE_TSX)
+- c:\Users\tony\.gemini\antigravity-ide\scratch\Orion_U2_Hedge\orion_dashboard\src\components\components.module.css (LANGUAGE_CSS)
+</ADDITIONAL_METADATA>

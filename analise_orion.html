@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orion Hedge — Análise de Performance Mensal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0b0d11;--bg2:#10141a;--bg3:#141820;--card:#161c26;
+    --border:#1e2632;--border2:#2a3448;
+    --teal:#1caa70;--teal-dim:#0f4a2e;
+    --red:#d24444;--red-dim:#410e0e;
+    --amber:#e09b00;--blue:#3490ee;--purple:#8c50dc;
+    --txt:#e6ecf8;--txt2:#6c7687;--txt3:#3c4450;
+    --green:#00c853;--green2:#00b248;
+  }
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;padding:20px}
+  h1{font-size:22px;font-weight:700;color:var(--txt);letter-spacing:-0.5px}
+  h2{font-size:14px;font-weight:600;color:var(--txt2);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px}
+  .header{display:flex;align-items:center;gap:12px;margin-bottom:28px;padding:16px 20px;background:var(--bg2);border:1px solid var(--border);border-top:2px solid var(--blue);border-radius:10px}
+  .header-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--blue),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .header-sub{font-size:12px;color:var(--txt2)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:16px}
+  textarea{width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;color:var(--txt);font-family:'JetBrains Mono',monospace;font-size:11px;padding:12px;resize:vertical;outline:none;transition:border-color .2s}
+  textarea:focus{border-color:var(--blue)}
+  .btn{padding:10px 24px;border:none;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;font-size:13px;transition:all .2s}
+  .btn-primary{background:linear-gradient(135deg,var(--blue),#2270cc);color:#fff}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(52,144,238,.3)}
+  .btn-secondary{background:var(--bg2);border:1px solid var(--border2);color:var(--txt2)}
+  .btn-secondary:hover{border-color:var(--blue);color:var(--txt)}
+  .btn-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+  @media(max-width:800px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .kpi-label{font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+  .kpi-value{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace}
+  .kpi-sub{font-size:11px;color:var(--txt2);margin-top:4px}
+  .green{color:var(--green)}
+  .red{color:var(--red)}
+  .amber{color:var(--amber)}
+  .blue{color:var(--blue)}
+  .white{color:#fff}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{padding:8px 12px;text-align:left;color:var(--txt2);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border)}
+  td{padding:10px 12px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:12px}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:rgba(52,144,238,.04)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+  .badge-green{background:rgba(0,200,83,.15);color:var(--green)}
+  .badge-red{background:rgba(210,68,68,.15);color:var(--red)}
+  .badge-amber{background:rgba(224,155,0,.15);color:var(--amber)}
+  .progress{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px}
+  .progress-fill{height:100%;border-radius:3px;transition:width .8s ease}
+  .sep-line{height:1px;background:var(--border);margin:16px 0}
+  .info-box{background:rgba(52,144,238,.08);border:1px solid rgba(52,144,238,.2);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6}
+  .info-box b{color:var(--blue)}
+  .warn-box{background:rgba(224,155,0,.08);border:1px solid rgba(224,155,0,.2);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--txt2);margin-bottom:16px;line-height:1.6}
+  .warn-box b{color:var(--amber)}
+  #results{display:none}
+  .month-bar-wrap{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .month-bar-label{font-size:11px;color:var(--txt2);width:80px;flex-shrink:0}
+  .month-bar{flex:1;height:14px;background:var(--border);border-radius:3px;overflow:hidden;position:relative}
+  .month-bar-fill{height:100%;border-radius:3px;transition:width 1s ease}
+  .month-bar-val{font-size:11px;font-family:'JetBrains Mono',monospace;width:80px;text-align:right;flex-shrink:0}
+  .tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;margin-left:6px;vertical-align:middle}
+  input[type=number]{background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--txt);font-family:'Inter',sans-serif;font-size:13px;padding:8px 12px;outline:none;width:140px;transition:border-color .2s}
+  input[type=number]:focus{border-color:var(--blue)}
+  label{font-size:12px;color:var(--txt2);margin-bottom:4px;display:block}
+  .flex-row{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">★</div>
+  <div>
+    <h1>Orion Hedge — Análise de Performance</h1>
+    <div class="header-sub">Conta: 163086425 (USC · Exness Standard Cent) · Calculadora de Rentabilidade Mensal</div>
+  </div>
+</div>
+
+<!-- INPUT SECTION -->
+<div class="card" id="input-section">
+  <h2>📋 Cole o Histórico de Posições do MT5</h2>
+  <div class="info-box">
+    <b>Como exportar do MetaTrader 5:</b><br>
+    1. Aba <b>Histórico</b> → clique com botão direito → <b>Relatório</b> → <b>HTML (Todas as Posições)</b><br>
+    2. Abra o HTML gerado, selecione toda a tabela (Ctrl+A) e cole aqui abaixo<br>
+    3. Ou cole o texto tab-separado diretamente (formato: Data · Position · Ativo · Tipo · Volume · Preço · ... · Lucro)
+  </div>
+
+  <div class="flex-row" style="margin-bottom:14px">
+    <div>
+      <label>Saldo Inicial da Conta (USC)</label>
+      <input type="number" id="saldo-inicial" value="1000" step="1" min="1">
+    </div>
+    <div>
+      <label>Cotação BRL/USD</label>
+      <input type="number" id="cotacao-brl" value="5.20" step="0.01" min="1">
+    </div>
+  </div>
+
+  <textarea id="raw-data" rows="12" placeholder="Cole aqui o histórico de posições copiado do MT5...
+
+Exemplo de formato aceito:
+2026.04.14 03:47:46	235772607	EURUSDc	buy	0.01	1.17656			2026.04.14 07:02:25	1.17867	0.00	0.00	2.11
+2026.04.14 03:47:46	235772608	EURUSDc	sell	0.01	1.17648			2026.04.15 02:28:58	1.17832	0.00	0.00	-1.84
+..."></textarea>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="analisar()">🔍 Analisar Dados</button>
+    <button class="btn btn-secondary" onclick="carregarDemostracao()">📊 Carregar Demonstração</button>
+    <button class="btn btn-secondary" onclick="limpar()">🗑 Limpar</button>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div id="results">
+
+  <!-- KPIs PRINCIPAIS -->
+  <div class="grid-4" id="kpi-grid"></div>
+
+  <!-- GRÁFICO DE BARRAS MENSAL -->
+  <div class="card">
+    <h2>📅 Lucro por Mês (USC)</h2>
+    <div id="bar-chart" style="padding-top:8px"></div>
+  </div>
+
+  <!-- TABELA MENSAL DETALHADA -->
+  <div class="card">
+    <h2>📊 Análise Mensal Detalhada</h2>
+    <div style="overflow-x:auto">
+      <table id="monthly-table">
+        <thead>
+          <tr>
+            <th>Mês</th>
+            <th>Operações</th>
+            <th>Lucro (USC)</th>
+            <th>Lucro (BRL)</th>
+            <th>Saldo Início</th>
+            <th>Rentabilidade %</th>
+            <th>Win Rate</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="monthly-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ESTATÍSTICAS GERAIS -->
+  <div class="grid-3" id="stats-grid"></div>
+
+  <!-- ATIVOS MAIS OPERADOS -->
+  <div class="card">
+    <h2>💱 Performance por Ativo</h2>
+    <div style="overflow-x:auto">
+      <table id="symbol-table">
+        <thead>
+          <tr>
+            <th>Ativo</th>
+            <th>Operações</th>
+            <th>Lucro Total (USC)</th>
+            <th>Win Rate</th>
+            <th>Fator de Lucro</th>
+          </tr>
+        </thead>
+        <tbody id="symbol-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function parseDate(s){
+  const m=s.trim().match(/(\d{4})\.(\d{2})\.(\d{2})/);
+  if(!m)return null;
+  return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
+}
+function monthKey(d){return d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0')}
+function monthLabel(k){
+  const nomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const [y,m]=k.split('-');
+  return nomes[parseInt(m)-1]+'/'+y;
+}
+function fmt(v,dec=2){return (v>=0?'+':'')+v.toFixed(dec)}
+function fmtUSC(v){return (v>=0?'+':'')+v.toFixed(2)+' USC'}
+function fmtPct(v){return (v>=0?'+':'')+v.toFixed(2)+'%'}
+
+function parseTrades(text){
+  const trades=[];
+  const lines=text.split('\n');
+  for(let line of lines){
+    const cols=line.split('\t').map(c=>c.trim());
+    if(cols.length<13) continue;
+    const d=parseDate(cols[0]);
+    if(!d) continue;
+    const closeDate=parseDate(cols[8])||d;
+    const profit=parseFloat(cols[12]);
+    if(isNaN(profit)) continue;
+    const symbol=cols[2];
+    const type=cols[3].toLowerCase();
+    if(symbol==='' || (type!=='buy' && type!=='sell')) continue;
+    trades.push({openDate:d,closeDate,symbol,type,volume:parseFloat(cols[4])||0,profit,commission:parseFloat(cols[10])||0,swap:parseFloat(cols[11])||0});
+  }
+  return trades;
+}
+
+function analisar(){
+  const raw=document.getElementById('raw-data').value;
+  const saldoInicial=parseFloat(document.getElementById('saldo-inicial').value)||1000;
+  const cotacao=parseFloat(document.getElementById('cotacao-brl').value)||5.20;
+  
+  if(!raw.trim()){alert('Por favor, cole os dados do histórico MT5.');return;}
+  
+  const trades=parseTrades(raw);
+  if(trades.length===0){
+    alert('Nenhuma operação encontrada. Verifique o formato dos dados.\nO formato esperado é separado por tabulações (TAB).');
+    return;
+  }
+  
+  // Agrupar por mês de fechamento
+  const byMonth={};
+  for(const t of trades){
+    const k=monthKey(t.closeDate);
+    if(!byMonth[k]) byMonth[k]={trades:[],lucro:0,wins:0,losses:0};
+    byMonth[k].trades.push(t);
+    byMonth[k].lucro+=t.profit+t.commission+t.swap;
+    if(t.profit>=0) byMonth[k].wins++; else byMonth[k].losses++;
+  }
+  
+  // Agrupar por símbolo
+  const bySymbol={};
+  for(const t of trades){
+    const s=t.symbol;
+    if(!bySymbol[s]) bySymbol[s]={trades:[],lucro:0,wins:0,losses:0,bruto_pos:0,bruto_neg:0};
+    bySymbol[s].trades.push(t);
+    const net=t.profit+t.commission+t.swap;
+    bySymbol[s].lucro+=net;
+    if(t.profit>=0){bySymbol[s].wins++;bySymbol[s].bruto_pos+=t.profit;}
+    else{bySymbol[s].losses++;bySymbol[s].bruto_neg+=Math.abs(t.profit);}
+  }
+  
+  // Meses em ordem
+  const meses=Object.keys(byMonth).sort();
+  let saldo=saldoInicial;
+  const monthData=[];
+  for(const k of meses){
+    const m=byMonth[k];
+    const total=m.trades.length;
+    const winRate=total>0?(m.wins/total*100):0;
+    const pct=(saldo>0)?(m.lucro/saldo*100):0;
+    monthData.push({key:k,label:monthLabel(k),total,lucro:m.lucro,pct,winRate,saldoInicio:saldo,saldoFim:saldo+m.lucro,wins:m.wins,losses:m.losses});
+    saldo+=m.lucro;
+  }
+  
+  // TOTAIS
+  const totalLucro=monthData.reduce((a,m)=>a+m.lucro,0);
+  const totalOps=trades.length;
+  const totalWins=trades.filter(t=>t.profit>=0).length;
+  const totalWinRate=totalOps>0?(totalWins/totalOps*100):0;
+  const mediaLucroMes=monthData.length>0?(totalLucro/monthData.length):0;
+  const mediaPctMes=monthData.length>0?(monthData.reduce((a,m)=>a+m.pct,0)/monthData.length):0;
+  const melhorMes=monthData.reduce((a,m)=>m.pct>a.pct?m:a,monthData[0]||{pct:-999,label:'N/A'});
+  const piorMes=monthData.reduce((a,m)=>m.pct<a.pct?m:a,monthData[0]||{pct:999,label:'N/A'});
+  const fatorLucro=trades.reduce((a,t)=>t.profit>0?a+t.profit:a,0)/(trades.reduce((a,t)=>t.profit<0?a+Math.abs(t.profit):a,0)||1);
+  
+  // Rentabilidade total acumulada
+  const rentTotal=(saldo-saldoInicial)/saldoInicial*100;
+  
+  // RENDER
+  renderKPIs({totalLucro,saldoFinal:saldo,mediaPctMes,totalOps,totalWinRate,mediaLucroMes,rentTotal,cotacao,meses:monthData.length,fatorLucro});
+  renderBarChart(monthData);
+  renderMonthTable(monthData,cotacao);
+  renderStatsGrid({mediaPctMes,melhorMes,piorMes,fatorLucro,totalWinRate,saldoInicial,saldo,cotacao});
+  renderSymbolTable(bySymbol,cotacao);
+  
+  document.getElementById('results').style.display='block';
+  document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function renderKPIs(d){
+  const g=document.getElementById('kpi-grid');
+  const isFator=d.fatorLucro;
+  g.innerHTML=`
+    <div class="kpi"><div class="kpi-label">💰 Lucro Total</div>
+      <div class="kpi-value ${d.totalLucro>=0?'green':'red'}">${d.totalLucro.toFixed(2)} <small style="font-size:13px">USC</small></div>
+      <div class="kpi-sub">R$ ${(d.totalLucro/100*d.cotacao).toFixed(2)} (${d.meses} ${d.meses===1?'mês':'meses'})</div>
+    </div>
+    <div class="kpi"><div class="kpi-label">📈 Média Mensal %</div>
+      <div class="kpi-value ${d.mediaPctMes>=0?'green':'red'}">${d.mediaPctMes.toFixed(2)}<small style="font-size:13px">%</small></div>
+      <div class="kpi-sub">~${(d.mediaLucroMes).toFixed(2)} USC/mês</div>
+    </div>
+    <div class="kpi"><div class="kpi-label">🏦 Saldo Final</div>
+      <div class="kpi-value white">${d.saldoFinal.toFixed(2)} <small style="font-size:13px">USC</small></div>
+      <div class="kpi-sub">Rentabilidade acumulada: ${d.rentTotal>=0?'+':''}${d.rentTotal.toFixed(2)}%</div>
+    </div>
+    <div class="kpi"><div class="kpi-label">✅ Win Rate</div>
+      <div class="kpi-value ${d.totalWinRate>=50?'green':'red'}">${d.totalWinRate.toFixed(1)}<small style="font-size:13px">%</small></div>
+      <div class="kpi-sub">${d.totalOps} operações · Fator ${d.fatorLucro.toFixed(2)}</div>
+    </div>
+  `;
+}
+
+function renderBarChart(months){
+  const c=document.getElementById('bar-chart');
+  if(months.length===0){c.innerHTML='<p style="color:var(--txt2)">Sem dados.</p>';return;}
+  const maxVal=Math.max(...months.map(m=>Math.abs(m.lucro)),1);
+  let html='';
+  for(const m of months){
+    const pct=Math.abs(m.lucro)/maxVal*100;
+    const col=m.lucro>=0?'var(--green)':'var(--red)';
+    const sign=m.lucro>=0?'+':'';
+    html+=`<div class="month-bar-wrap">
+      <div class="month-bar-label">${m.label}</div>
+      <div class="month-bar"><div class="month-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+      <div class="month-bar-val" style="color:${col}">${sign}${m.lucro.toFixed(2)}</div>
+    </div>`;
+  }
+  c.innerHTML=html;
+}
+
+function renderMonthTable(months,cotacao){
+  const tbody=document.getElementById('monthly-tbody');
+  let html='';
+  for(const m of months){
+    const pctC=m.pct>=0?'green':'red';
+    const lucroC=m.lucro>=0?'var(--green)':'var(--red)';
+    const brl=(m.lucro/100*cotacao).toFixed(2);
+    html+=`<tr>
+      <td><b style="color:var(--txt)">${m.label}</b></td>
+      <td><span class="badge badge-amber">${m.total} ops</span></td>
+      <td style="color:${lucroC};font-weight:600">${m.lucro>=0?'+':''}${m.lucro.toFixed(2)}</td>
+      <td style="color:${lucroC}">R$ ${brl}</td>
+      <td>${m.saldoInicio.toFixed(2)}</td>
+      <td><span class="badge ${m.pct>=0?'badge-green':'badge-red'}">${m.pct>=0?'+':''}${m.pct.toFixed(2)}%</span></td>
+      <td>${m.winRate.toFixed(1)}%</td>
+      <td><span class="badge ${m.lucro>=0?'badge-green':'badge-red'}">${m.lucro>=0?'✅ POSITIVO':'❌ NEGATIVO'}</span></td>
+    </tr>`;
+  }
+  if(months.length===0) html='<tr><td colspan="8" style="text-align:center;color:var(--txt2);padding:20px">Sem dados mensais</td></tr>';
+  tbody.innerHTML=html;
+}
+
+function renderStatsGrid(d){
+  const g=document.getElementById('stats-grid');
+  const mBest=d.melhorMes;
+  const mWorst=d.piorMes;
+  g.innerHTML=`
+    <div class="kpi">
+      <div class="kpi-label">🏆 Melhor Mês</div>
+      <div class="kpi-value green">${mBest.pct?mBest.pct.toFixed(2)+'%':'N/A'}</div>
+      <div class="kpi-sub">${mBest.label||'—'} · ${mBest.lucro?mBest.lucro.toFixed(2)+' USC':'—'}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">📉 Pior Mês</div>
+      <div class="kpi-value ${(mWorst.pct||0)>=0?'green':'red'}">${mWorst.pct!=null?mWorst.pct.toFixed(2)+'%':'N/A'}</div>
+      <div class="kpi-sub">${mWorst.label||'—'} · ${mWorst.lucro!=null?mWorst.lucro.toFixed(2)+' USC':'—'}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">📊 Fator de Lucro</div>
+      <div class="kpi-value ${d.fatorLucro>=1?'green':'red'}">${d.fatorLucro.toFixed(2)}</div>
+      <div class="kpi-sub">${d.fatorLucro>=1.5?'Excelente':d.fatorLucro>=1.2?'Bom':'Melhorar'}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">💵 Capital Inicial</div>
+      <div class="kpi-value white">${d.saldoInicial.toFixed(2)} USC</div>
+      <div class="kpi-sub">R$ ${(d.saldoInicial/100*d.cotacao).toFixed(2)}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">💰 Capital Final</div>
+      <div class="kpi-value green">${d.saldo.toFixed(2)} USC</div>
+      <div class="kpi-sub">R$ ${(d.saldo/100*d.cotacao).toFixed(2)}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">📈 Win Rate Total</div>
+      <div class="kpi-value ${d.totalWinRate>=50?'green':'red'}">${d.totalWinRate.toFixed(1)}%</div>
+      <div class="kpi-sub">${d.totalWinRate>=55?'Excelente':d.totalWinRate>=50?'Bom':'Precisa melhorar'}</div>
+    </div>
+  `;
+}
+
+function renderSymbolTable(bySymbol,cotacao){
+  const symbols=Object.keys(bySymbol).sort((a,b)=>bySymbol[b].lucro-bySymbol[a].lucro);
+  const tbody=document.getElementById('symbol-tbody');
+  let html='';
+  for(const s of symbols){
+    const d=bySymbol[s];
+    const total=d.wins+d.losses;
+    const wr=total>0?(d.wins/total*100):0;
+    const fator=d.bruto_neg>0?d.bruto_pos/d.bruto_neg:d.bruto_pos>0?999:0;
+    const col=d.lucro>=0?'var(--green)':'var(--red)';
+    html+=`<tr>
+      <td><b style="color:var(--txt)">${s}</b></td>
+      <td>${total}</td>
+      <td style="color:${col};font-weight:600">${d.lucro>=0?'+':''}${d.lucro.toFixed(2)}</td>
+      <td><span class="badge ${wr>=50?'badge-green':'badge-red'}">${wr.toFixed(1)}%</span></td>
+      <td style="color:${fator>=1?'var(--green)':'var(--red)'}">${fator>=999?'∞':fator.toFixed(2)}</td>
+    </tr>`;
+  }
+  if(symbols.length===0) html='<tr><td colspan="5" style="text-align:center;color:var(--txt2);padding:20px">Sem dados</td></tr>';
+  tbody.innerHTML=html;
+}
+
+function limpar(){
+  document.getElementById('raw-data').value='';
+  document.getElementById('results').style.display='none';
+}
+
+function carregarDemostracao(){
+  // Usa os dados reais do usuário que eu tenho
+  const demo=`2026.04.14 03:47:46\t235772607\tEURUSDc\tbuy\t0.01\t1.17656\t\t\t2026.04.14 07:02:25\t1.17867\t0.00\t0.00\t2.11
+2026.04.14 03:47:46\t235772608\tEURUSDc\tsell\t0.01\t1.17648\t\t\t2026.04.15 02:28:58\t1.17832\t0.00\t0.00\t-1.84
+2026.04.14 04:09:48\t235779040\tAUDUSDc\tbuy\t0.01\t0.70858\t\t\t2026.04.14 07:07:43\t0.71007\t0.00\t0.00\t1.49
+2026.04.14 04:09:48\t235779041\tAUDUSDc\tsell\t0.01\t0.70849\t\t\t2026.04.19 23:46:52\t0.71340\t0.00\t0.00\t-4.91
+2026.04.14 04:10:10\t235779100\tGBPUSDc\tbuy\t0.01\t1.35166\t\t\t2026.04.14 07:41:26\t1.35358\t0.00\t0.00\t1.92
+2026.04.14 04:10:10\t235779101\tGBPUSDc\tsell\t0.01\t1.35156\t\t\t2026.04.15 09:11:30\t1.35527\t0.00\t0.00\t-3.71
+2026.04.14 04:10:15\t235779122\tUSDJPYc\tbuy\t0.01\t159.117\t\t\t2026.04.15 03:00:17\t159.035\t0.00\t0.00\t-0.52
+2026.04.14 04:10:15\t235779134\tUSDCADc\tbuy\t0.01\t1.37834\t\t\t2026.04.14 15:16:55\t1.37556\t0.00\t0.00\t-2.02
+2026.04.14 04:10:15\t235779135\tUSDJPYc\tsell\t0.01\t159.107\t\t\t2026.04.14 14:39:23\t158.655\t0.00\t0.00\t2.85
+2026.04.14 04:10:15\t235779138\tUSDCADc\tsell\t0.01\t1.37820\t\t\t2026.04.14 07:11:39\t1.37695\t0.00\t0.00\t0.91
+2026.04.14 04:10:21\t235779148\tUSDCHFc\tbuy\t0.01\t0.78316\t\t\t2026.04.15 02:34:23\t0.78187\t0.00\t0.00\t-1.65
+2026.04.14 04:10:21\t235779150\tUSDCHFc\tsell\t0.01\t0.78303\t\t\t2026.04.14 07:06:39\t0.78091\t0.00\t0.00\t2.71
+2026.04.14 07:47:26\t235881036\tEURUSDc\tbuy\t0.02\t1.17904\t\t\t2026.04.14 11:14:18\t1.17985\t0.00\t0.00\t1.62
+2026.04.14 09:23:25\t235927891\tAUDUSDc\tbuy\t0.02\t1.71078\t\t\t2026.04.14 10:15:21\t0.71197\t0.00\t0.00\t2.38
+2026.04.14 09:50:08\t235943157\tGBPUSDc\tbuy\t0.02\t1.35461\t\t\t2026.04.14 10:56:59\t1.35585\t0.00\t0.00\t2.48
+2026.04.14 12:55:53\t236042632\tUSDCADc\tbuy\t0.10\t1.37390\t\t\t2026.04.14 15:16:54\t1.37556\t0.00\t0.00\t12.07
+2026.04.14 11:50:17\t235998438\tGBPUSDc\tsell\t0.06\t1.35757\t\t\t2026.04.15 09:11:30\t1.35529\t0.00\t0.00\t13.68
+2026.04.17 13:15:00\t238678059\tUSDCHFc\tbuy\t0.10\t0.77824\t\t\t2026.04.17 19:48:06\t0.78120\t0.00\t0.00\t37.88
+2026.04.17 14:32:07\t238801001\tUSDJPYc\tbuy\t0.10\t157.820\t\t\t2026.04.17 18:52:32\t158.438\t0.00\t0.00\t39.00
+2026.04.17 13:15:00\t238678060\tEURUSDc\tsell\t0.06\t1.18464\t\t\t2026.04.17 15:03:53\t1.18119\t0.00\t0.00\t20.70
+2026.04.21 15:36:20\t241107959\tEURUSDc\tbuy\t0.15\t1.17436\t\t\t2026.05.01 14:11:43\t1.17775\t0.00\t0.00\t50.85
+2026.04.17 08:27:51\t240763308\tUSDJPYc\tsell\t0.06\t159.204\t\t\t2026.04.28 03:34:04\t159.037\t0.00\t0.00\t6.30
+2026.04.21 17:05:11\t241181029\tUSDJPYc\tsell\t0.10\t159.535\t\t\t2026.04.28 03:34:04\t159.037\t0.00\t0.00\t31.31
+2026.04.22 07:00:00\t241648873\tUSDJPYc\tsell\t0.15\t159.130\t\t\t2026.04.28 03:34:04\t159.037\t0.00\t0.00\t8.77
+2026.05.12 19:45:34\t255102091\tUSDJPYc\tbuy\t0.08\t157.585\t\t\t2026.05.13 01:10:52\t157.723\t0.00\t0.00\t7.00
+2026.05.12 19:45:40\t255102101\tEURUSDc\tsell\t0.08\t1.17421\t\t\t2026.05.13 00:02:10\t1.17340\t0.00\t0.00\t6.48
+2026.05.12 19:45:41\t255102104\tAUDUSDc\tbuy\t0.08\t0.72388\t\t\t2026.05.13 10:00:57\t0.72446\t0.00\t0.00\t4.64
+2026.05.13 00:31:00\t255188833\tEURUSDc\tsell\t0.08\t1.17350\t\t\t2026.05.13 06:10:50\t1.17297\t0.00\t0.00\t4.24
+2026.05.13 01:10:52\t255212450\tUSDJPYc\tbuy\t0.08\t157.733\t\t\t2026.05.13 09:18:35\t157.859\t0.00\t0.00\t6.39`;
+  document.getElementById('raw-data').value=demo;
+  document.getElementById('saldo-inicial').value='1000';
+}
+</script>
+</body>
+</html>

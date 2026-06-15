@@ -1,0 +1,17 @@
+# Ignorar sub-repositório do Dashboard
+orion_dashboard/
+
+# Ignorar pastas temporárias e backups locais
+_temp/
+_backup/
+
+# Ignorar binários compilados do MT5 (opcional, mas recomendado pois são gerados a partir do .mq5)
+*.ex5
+
+# Ignorar arquivos de log e temporários de compilação
+*.log
+compile_log_new.log
+compile_log.log
+history_raw.txt
+extracted_history.txt
+line35.txt
