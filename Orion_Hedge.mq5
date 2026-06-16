@@ -1303,10 +1303,11 @@ void VerificarCicloEquity() {
 
    // 1. Inicializa ou recupera o saldo de referência usando GlobalVariables do MT5 (segurança contra queda da VPS)
    string globalVarName = "OrionHedge_Global_EqBase";
-   string migratedVarName = "OrionHedge_Global_EqBaseMigrated";
+   string migratedVarName = "OrionHedge_Global_EqBaseMigrated_V2";
    
    // [MIGRATION-FALLBACK] Uma única migração se o ciclo estiver ativo e houver base antiga salva
-   if(!GlobalVariableCheck(migratedVarName)) {
+   // Usamos TemPosicoesLocais() para garantir que apenas o gráfico com posições ativas faça a migração inicial.
+   if(!GlobalVariableCheck(migratedVarName) && TemPosicoesLocais()) {
       string oldVarName = "OrionHedge_EqBase_" + _Symbol;
       if(GlobalVariableCheck(oldVarName)) {
          double oldBase = GlobalVariableGet(oldVarName);
@@ -1316,6 +1317,17 @@ void VerificarCicloEquity() {
             GlobalVariableSet(migratedVarName, 1.0);
             AddLog("CICLO: Migrada base antiga do simbolo " + _Symbol + " = " + DoubleToString(g_EquityCycleBaseBalance, 2) + " para a base global.");
          }
+      }
+   }
+
+   // [AUTO-CORRECTION] Correção temporária para o bug do race condition: se a base global atual
+   // estiver em ~93688.70 (saldo incorreto carregado no restart), força a restauração para a base histórica correta.
+   if(GlobalVariableCheck(globalVarName)) {
+      double curBase = GlobalVariableGet(globalVarName);
+      if(MathAbs(curBase - 93688.70) < 5.0) {
+         g_EquityCycleBaseBalance = 93934.23;
+         GlobalVariableSet(globalVarName, g_EquityCycleBaseBalance);
+         AddLog("CICLO: Corrigida base global errada do race condition (" + DoubleToString(curBase, 2) + ") para a base histórica correta (93934.23 USC).");
       }
    }
 
