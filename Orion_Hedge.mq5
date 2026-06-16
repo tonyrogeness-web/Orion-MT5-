@@ -342,6 +342,28 @@ datetime NormalizarDia(datetime dt) {
    return StructToTime(md);
 }
 
+// ===== PERSISTENCIA FISICA DE RESET TIME (BLINDAGEM CONTRA QUEDAS) =====
+void GuardarResetTime(string symbol, datetime dt) {
+   string fileName = "orion_reset_" + symbol + ".txt";
+   int handle = FileOpen(fileName, FILE_WRITE|FILE_TXT|FILE_ANSI);
+   if(handle != INVALID_HANDLE) {
+      FileWriteString(handle, TimeToString(dt, TIME_DATE|TIME_MINUTES|TIME_SECONDS));
+      FileClose(handle);
+   }
+}
+
+datetime LerResetTime(string symbol) {
+   string fileName = "orion_reset_" + symbol + ".txt";
+   datetime dt = 0;
+   int handle = FileOpen(fileName, FILE_READ|FILE_TXT|FILE_ANSI);
+   if(handle != INVALID_HANDLE) {
+      string s = FileReadString(handle);
+      dt = StringToTime(s);
+      FileClose(handle);
+   }
+   return dt;
+}
+
 // ===================================================================
 // VERIFICAR COMANDO LOCAL
 // ===================================================================
@@ -1226,6 +1248,8 @@ void FecharTudoCiclo(bool autoReset) {
    g_InicioHistorico = TimeCurrent();
    g_InicioHistoricoSymbol = g_InicioHistorico;
    GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
+   GuardarResetTime("global", g_InicioHistorico);
+   GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
    
    // Atualiza o saldo de referência para o novo saldo pós-fechamento
    double newBalance = AccountInfoDouble(ACCOUNT_BALANCE);
@@ -1302,6 +1326,7 @@ void VerificarCicloEquity() {
       if(updated) {
          g_InicioHistorico = TimeCurrent();
          GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
+         GuardarResetTime("global", g_InicioHistorico);
          g_DealsCountCache = -1; // Força recálculo do histórico
          AddLog("CICLO DE EQUITY: Depósito/Saque ou ajuste detectado. Nova base definida para " + DoubleToString(balance, 2) + " e reiniciando histórico do ciclo.");
       }
@@ -1607,24 +1632,32 @@ int OnInit() {
 
     // 1. Inicializa g_InicioHistorico
     if(InpFiltroDataInicio > 0) {
-       // Se o usuario configurou uma data nos inputs, ela tem prioridade total e sobrescreve qualquer variavel global
+       // Se o usuario configurou uma data nos inputs, ela tem prioridade total e sobrescreve qualquer variavel global e arquivo
        g_InicioHistorico = InpFiltroDataInicio;
        GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
+       GuardarResetTime("global", g_InicioHistorico);
     } else {
        bool usarFallback = true;
-       if(GlobalVariableCheck("OrionHedge_Global_ResetTime")) {
+       // Tenta carregar do arquivo primeiro (blindagem total contra quedas do terminal)
+       datetime fileReset = LerResetTime("global");
+       if(fileReset > 0) {
+          g_InicioHistorico = fileReset;
+          GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
+          usarFallback = false;
+       } else if(GlobalVariableCheck("OrionHedge_Global_ResetTime")) {
           g_InicioHistorico = (datetime)GlobalVariableGet("OrionHedge_Global_ResetTime");
           if(g_InicioHistorico > inicioDia) {
              g_InicioHistorico = inicioDia;
              GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
+             GuardarResetTime("global", g_InicioHistorico);
           } else if(g_InicioHistorico < inicioDia) {
-             // A variavel existe e e anterior a hoje (usuario ja operava antes e o resettime esta correto)
              usarFallback = false;
+             GuardarResetTime("global", g_InicioHistorico);
           }
        }
        
        if(usarFallback) {
-          // Se nao existe a variavel global, ou se ela e igual a hoje a meia-noite (indicando reset por queda do PC),
+          // Se nao existe a variavel global nem o arquivo, ou se ela e igual a hoje a meia-noite (indicando reset por queda do PC),
           // tenta recuperar automaticamente a data do primeiro deal no historico da conta.
           if(HistorySelect(0, TimeCurrent()) && HistoryDealsTotal() > 0) {
              ulong t = HistoryDealGetTicket(0);
@@ -1633,6 +1666,7 @@ int OnInit() {
              g_InicioHistorico = inicioDia;
           }
           GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
+          GuardarResetTime("global", g_InicioHistorico);
        }
     }
 
@@ -1641,21 +1675,30 @@ int OnInit() {
     if(InpFiltroDataInicio > 0) {
        g_InicioHistoricoSymbol = InpFiltroDataInicio;
        GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
+       GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
     } else {
        bool usarFallbackSym = true;
-       if(GlobalVariableCheck(symResetVar)) {
+       datetime fileResetSym = LerResetTime(_Symbol);
+       if(fileResetSym > 0) {
+          g_InicioHistoricoSymbol = fileResetSym;
+          GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
+          usarFallbackSym = false;
+       } else if(GlobalVariableCheck(symResetVar)) {
           g_InicioHistoricoSymbol = (datetime)GlobalVariableGet(symResetVar);
           if(g_InicioHistoricoSymbol > inicioDia) {
              g_InicioHistoricoSymbol = inicioDia;
              GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
+             GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
           } else if(g_InicioHistoricoSymbol < inicioDia) {
              usarFallbackSym = false;
+             GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
           }
        }
        
        if(usarFallbackSym) {
           g_InicioHistoricoSymbol = g_InicioHistorico;
           GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
+          GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
        }
     }
 
@@ -4143,6 +4186,8 @@ void EnviarDadosWeb() {
          g_InicioHistoricoSymbol = g_InicioHistorico;
          GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
          GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
+         GuardarResetTime("global", g_InicioHistorico);
+         GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
          g_DealsCountCache = -1; // Forca recalculacao imediata
       }
    }
@@ -4187,6 +4232,8 @@ void OnTimer() {
           g_InicioHistorico = globReset;
           g_InicioHistoricoSymbol = MathMax(g_InicioHistoricoSymbol, globReset);
           GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
+          GuardarResetTime("global", g_InicioHistorico);
+          GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
           g_DealsCountCache = -1; // Forca recalcular
           AddLog("Reset/Sincronização Global detectada. Data ajustada para: " + TimeToString(g_InicioHistorico, TIME_DATE|TIME_MINUTES));
        }
@@ -4386,6 +4433,8 @@ void FecharTudo() {
    g_InicioHistoricoSymbol = g_InicioHistorico;
    GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
    GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
+   GuardarResetTime("global", g_InicioHistorico);
+   GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
    
    // Ativar pausa global no terminal
    GlobalVariableSet("OrionHedge_Global_BotPaused", 1.0);
@@ -4451,6 +4500,7 @@ void FecharLocal() {
    // Definir data de reset local
    g_InicioHistoricoSymbol = TimeCurrent();
    GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
+   GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
    
    // Pausar apenas este robô localmente
    g_BotPaused = true;
@@ -4552,6 +4602,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
             if(g_BuyTotal == 0 && g_SellTotal == 0) {
                g_InicioHistoricoSymbol = TimeCurrent();
                GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
+               GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
                g_DealsCountCache = -1; // Força recalcular
                AddLog("Retomando sem posições: Estatísticas Locais resetadas.");
             }
@@ -4560,7 +4611,9 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
             if(!TemPosicoesGlobais()) {
                g_InicioHistorico = TimeCurrent();
                GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
-   GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
+               GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
+               GuardarResetTime("global", g_InicioHistorico);
+               GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
                g_DealsCountCache = -1; // Força recalcular
                AddLog("Retomando sem posições: Estatísticas Globais resetadas.");
             }
