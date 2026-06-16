@@ -4,6 +4,8 @@ orion_dashboard/
 # Ignorar pastas temporárias e backups locais
 _temp/
 _backup/
+temp_db/
+temp_db2/
 
 # Ignorar binários compilados do MT5 (opcional, mas recomendado pois são gerados a partir do .mq5)
 *.ex5
