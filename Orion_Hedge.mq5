@@ -1,11 +1,11 @@
 //+------------------------------------------------------------------+
 //|                           Orion_Hedge.mq5                       |
 //|  ORION HEDGE — Grade COMPRA + VENDA Simultaneas (2 Cestos)       |
-//|  v3.39 HEDGE — TP Bidirecional | Cooldown | Validacao de Simbolo  |
+//|  v3.40 HEDGE — TP Bidirecional | Cooldown | Validacao de Simbolo  |
 //+------------------------------------------------------------------+
 #property copyright "Orion Logic Elite"
-#property version   "3.39"
-#property description "Orion Hedge v3.39 — Trailing de Patrimonio Ajustado"
+#property version   "3.40"
+#property description "Orion Hedge v3.40 — Fix Base Ciclo Desatualizada | Taxa BRL 5.88"
 
 #include <Trade\Trade.mqh>
 
@@ -113,7 +113,7 @@ input bool            InpAtivarAntiFaca     = true;        // Ativar Gatilho Ant
 input ENUM_TIMEFRAMES InpAntiFacaTF         = PERIOD_M5;   // Timeframe de Confirmacao (M1/M5/M15)
 
 input group "=== VISUAL & EXTRAS ==="
-input double InpTaxaBRL            = 5.20;   // Cotacao Dolar Estimada (USD/BRL)
+input double InpTaxaBRL            = 5.88;   // Cotacao Dolar Estimada (USD/BRL)
 input datetime InpFiltroDataInicio = 0;      // [Filtro] Data Inicial (0 = ignorar)
 input datetime InpFiltroDataFim    = 0;      // [Filtro] Data Final   (0 = agora)
 
@@ -1298,7 +1298,18 @@ void VerificarCicloEquity() {
    string globalVarName = "OrionHedge_EqBase_" + _Symbol;
    if(g_EquityCycleBaseBalance <= 0) {
       if(GlobalVariableCheck(globalVarName)) {
-         g_EquityCycleBaseBalance = GlobalVariableGet(globalVarName);
+         double savedBase = GlobalVariableGet(globalVarName);
+         // [BUG-FIX] Sanity check: se a base salva desviou > 20% do saldo real,
+         // ela está desatualizada (ex: depósito externo, troca de conta, migração).
+         // Reinicializa com o saldo real para corrigir o "preço base antigo".
+         double deviation = (balance > 0) ? MathAbs(savedBase - balance) / balance * 100.0 : 100.0;
+         if(deviation > 20.0) {
+            g_EquityCycleBaseBalance = balance;
+            GlobalVariableSet(globalVarName, g_EquityCycleBaseBalance);
+            AddLog(StringFormat("CICLO: Base desatualizada detectada (salva=%.2f, real=%.2f, desvio=%.1f%%). Reinicializando com saldo atual.", savedBase, balance, deviation));
+         } else {
+            g_EquityCycleBaseBalance = savedBase;
+         }
       } else {
          g_EquityCycleBaseBalance = balance;
          GlobalVariableSet(globalVarName, g_EquityCycleBaseBalance);

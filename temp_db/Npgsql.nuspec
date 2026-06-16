@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Npgsql</id>
+    <version>3.2.7</version>
+    <authors>Shay Rojansky,Emil Lenngren,Francisco Figueiredo Jr.,Kenji Uno</authors>
+    <owners>Shay Rojansky,Emil Lenngren,Francisco Figueiredo Jr.,Kenji Uno</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <licenseUrl>https://raw.githubusercontent.com/npgsql/npgsql/master/LICENSE.txt</licenseUrl>
+    <projectUrl>http://www.npgsql.org/</projectUrl>
+    <iconUrl>http://www.npgsql.org/img/postgresql.gif</iconUrl>
+    <description>Npgsql is the open source .NET data provider for PostgreSQL.</description>
+    <copyright>Copyright 2017 © The Npgsql Development Team</copyright>
+    <tags>npgsql postgresql postgres ado ado.net database sql</tags>
+    <repository type="git" url="git://github.com/npgsql/npgsql" />
+    <dependencies>
+      <group targetFramework=".NETFramework4.5">
+        <dependency id="System.Threading.Tasks.Extensions" version="4.3.0" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETFramework4.5.1">
+        <dependency id="System.Threading.Tasks.Extensions" version="4.3.0" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETStandard1.3">
+        <dependency id="NETStandard.Library" version="1.6.1" exclude="Build,Analyzers" />
+        <dependency id="System.Collections.Specialized" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.ComponentModel.TypeConverter" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Data.Common" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Diagnostics.Process" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Globalization.Extensions" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Net.NameResolution" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Net.NetworkInformation" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Net.Security" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Reflection.TypeExtensions" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Threading.Tasks.Extensions" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Threading.Thread" version="4.3.0" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="System.Threading.Tasks.Extensions" version="4.3.0" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>
