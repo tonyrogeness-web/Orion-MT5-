@@ -157,6 +157,7 @@ int      g_MagicSell;
 
 // Lote dinamico
 double   g_LoteBase        = 0.01;
+double   g_TaxaBRLAtual    = 5.88; // [v3.40] Taxa BRL atualizada de forma dinamica pelo par USDBRL
 double   g_TakeProfitBase  = 0;
 double   g_TakeProfitAtual = 0;
 double   g_SoftStopAtual   = 0;
@@ -1622,10 +1623,11 @@ int OnInit() {
 
    LimparIndicadoresAnalise();
 
+   g_TaxaBRLAtual = ObterTaxaBRLDinamica();
    AtualizarLoteBase();
    LimparPainel();  // [v3.25] Vassoura completa on init — remove fantasmas de sessoes anteriores
    EventSetTimer(1);
-   AddLog("ORION v3.39 OK! Par: "+_Symbol+" | MagicBuy="+IntegerToString(g_MagicBuy));
+   AddLog("ORION v3.40 OK! Par: "+_Symbol+" | MagicBuy="+IntegerToString(g_MagicBuy));
    AddLog("[WEB] Web Ativa: " + (InpWebAtiva ? "SIM" : "NAO") + " | URL: " + InpWebUrl);
    AddLog("Lote:"+DoubleToString(g_LoteBase,3)+" TP:"+DoubleToString(g_TakeProfitAtual,2)+" SS:"+DoubleToString(g_SoftStopAtual,0)+" [LotBase="+DoubleToString(InpLotInitial,3)+"]");
    if(InpCooldownHabilitado) AddLog("Cooldown Ativo: "+IntegerToString(InpCooldownMinutos)+" min apos cada ciclo.");
@@ -2088,6 +2090,7 @@ void OnDeinit(const int reason) {
    LimparLinhasAnalise();
    LimparIndicadoresAnalise();
    LimparPainel();
+   ChartRedraw(0);
 }
 
 //===================================================================
@@ -2460,6 +2463,7 @@ void LimparPainel() {
       string nm=ObjectName(0,i,0,-1);
       if(StringFind(nm,PANEL_PREFIX)==0) ObjectDelete(0,nm);
    }
+   ChartRedraw(0);
 }
 
 //===================================================================
@@ -2530,8 +2534,136 @@ string FormatBRL(double val) {
    
    return "R$ " + signStr + res_int + "," + res_frac;
 }
+//===================================================================
+// OBTER COTACAO USD/BRL VIA API WEB (AWESOMEAPI)
+//===================================================================
+double GetUSDBRLFromAPI() {
+   char data[], result[];
+   string result_headers;
+   string url = "https://economia.awesomeapi.com.br/json/last/USD-BRL";
+   
+   // WebRequest necessita que a URL "https://economia.awesomeapi.com.br"
+   // esteja cadastrada nas Opções do MT5 -> Expert Advisors
+   ResetLastError();
+   int res = WebRequest("GET", url, "", 3000, data, result, result_headers);
+   
+   if(res == 200 && ArraySize(result) > 0) {
+      string json = CharArrayToString(result, 0, -1, CP_UTF8);
+      int pos = StringFind(json, "\"bid\":");
+      if(pos < 0) pos = StringFind(json, "\"bid\" :");
+      if(pos >= 0) {
+         int valStart = StringFind(json, "\"", pos + 5) + 1;
+         if(valStart > 0) {
+            int valEnd = StringFind(json, "\"", valStart);
+            if(valEnd > valStart) {
+               string valStr = StringSubstr(json, valStart, valEnd - valStart);
+               double val = StringToDouble(valStr);
+               if(val > 3.0 && val < 10.0) {
+                  return val;
+               }
+            }
+         }
+      }
+   } else {
+      int err = _LastError;
+      static datetime lastLogTime = 0;
+      if(TimeCurrent() - lastLogTime > 600) {
+         lastLogTime = TimeCurrent();
+         if(res == -1) {
+            Print("[USD/BRL WEB] WebRequest falhou (Erro MQL5 ", err, "). Para atualizar a conversão em R$ dinamicamente com o Dólar real, adicione a URL 'https://economia.awesomeapi.com.br' no menu Ferramentas -> Opcoes -> Expert Advisors -> Permitir WebRequest.");
+         } else {
+            Print("[USD/BRL WEB] API retornou erro HTTP: ", res);
+         }
+      }
+   }
+   return 0;
+}
+
+//===================================================================
+// OBTER TAXA BRL DINAMICA (USD/BRL)
+//===================================================================
+double ObterTaxaBRLDinamica() {
+   // 1. Tenta obter a cotação em tempo real via API Web
+   double apiBid = GetUSDBRLFromAPI();
+   if(apiBid > 0) {
+      return apiBid;
+   }
+   
+   // 2. Se falhar, tenta buscar nomes de símbolos USDBRL comuns no broker
+   string commonNames[] = {"USDBRL", "USDBRLc", "USDBRLm", "USDBRL_ec", "USDBRL_i", "USDBRL_k"};
+   int numNames = ArraySize(commonNames);
+   
+   for(int i = 0; i < numNames; i++) {
+      string sym = commonNames[i];
+      if(SymbolSelect(sym, true)) {
+         double bid = SymbolInfoDouble(sym, SYMBOL_BID);
+         if(bid <= 0) {
+            bid = SymbolInfoDouble(sym, SYMBOL_LAST);
+         }
+         if(bid <= 0) {
+            MqlRates rates[];
+            if(CopyRates(sym, PERIOD_M1, 0, 1, rates) > 0) {
+               bid = rates[0].close;
+            }
+         }
+         if(bid > 0) {
+            return bid;
+         }
+      }
+   }
+   
+   // Se falhar a busca direta, tenta varrer a lista de símbolos
+   string symbolFound = "";
+   int totalSymbols = SymbolsTotal(false);
+   for(int i = 0; i < totalSymbols; i++) {
+      string symName = SymbolName(i, false);
+      string symUpper = symName;
+      StringToUpper(symUpper);
+      if(StringFind(symUpper, "USDBRL") >= 0) {
+         symbolFound = symName;
+         break;
+      }
+   }
+   
+   if(symbolFound != "") {
+      if(SymbolSelect(symbolFound, true)) {
+         double bid = SymbolInfoDouble(symbolFound, SYMBOL_BID);
+         if(bid <= 0) {
+            bid = SymbolInfoDouble(symbolFound, SYMBOL_LAST);
+         }
+         if(bid <= 0) {
+            MqlRates rates[];
+            if(CopyRates(symbolFound, PERIOD_M1, 0, 1, rates) > 0) {
+               bid = rates[0].close;
+            }
+         }
+         if(bid > 0) {
+            return bid;
+         }
+      }
+   }
+   
+   // Se tudo falhar, gera relatório de diagnóstico para descobrirmos os nomes dos símbolos BRL
+   int fileHandle = FileOpen("orion_brl_symbols.txt", FILE_WRITE|FILE_TXT|FILE_ANSI);
+   if(fileHandle != INVALID_HANDLE) {
+      FileWriteString(fileHandle, "=== DIAGNOSTICO DE SIMBOLOS BRL ===\n");
+      FileWriteString(fileHandle, "Total de simbolos: " + IntegerToString(totalSymbols) + "\n");
+      for(int i = 0; i < totalSymbols; i++) {
+         string symName = SymbolName(i, false);
+         string symUpper = symName;
+         StringToUpper(symUpper);
+         if(StringFind(symUpper, "BRL") >= 0) {
+            FileWriteString(fileHandle, "Simbolo com BRL: " + symName + "\n");
+         }
+      }
+      FileClose(fileHandle);
+   }
+   
+   return InpTaxaBRL;
+}
+
 // Converte USC (centavos) para BRL
-double UscToBrl(double v) { return (v / 100.0) * InpTaxaBRL; }
+double UscToBrl(double v) { return (v / 100.0) * g_TaxaBRLAtual; }
 //===================================================================
 void DesenharPainel() {
    int px=20,py=20,pw=340,pad=10;
@@ -2553,8 +2685,8 @@ void DesenharPainel() {
    PRect("hdr_bg",px,cur,pw,40,CLR_BG_HEADER,-1,200);
    PRect("hdr_top",px,cur,pw,2,CLR_BLUE,-1,201); cur+=2;
    PLabel("hdr_ico",px+pad,cur+7,"*",CLR_BLUE,11,true);
-   PLabel("hdr_title",px+pad+16,cur+7,"ORION HEDGE v3.39",CLR_TXT_PRIMARY,10,true);  // [v3.39] Trailing de Patrimonio Ajustado | Layout Premium
-   PLabel("hdr_ver",px+pad+16,cur+20,_Symbol+(g_BotPaused?"  [PAUSADO]":"  . Pro Hedge"),
+   PLabel("hdr_title",px+pad+16,cur+7,"ORION HEDGE v3.40",CLR_TXT_PRIMARY,10,true);  // [v3.40] Trailing de Patrimonio Ajustado | Layout Premium
+   PLabel("hdr_ver",px+pad+16,cur+20,_Symbol+(g_BotPaused?"  [PAUSADO]":"  . Pro Hedge")+"  [USD/BRL: "+DoubleToString(g_TaxaBRLAtual,2)+"]",
           g_BotPaused?CLR_RED:CLR_AMBER,7);
    PButton("btn_cfg",rx-40,cur+7,18,18,g_ShowSettings?"X":"S",CLR_BG_CARD,g_ShowSettings?CLR_AMBER:CLR_TXT_LABEL);
    PButton("btn_min",rx-18,cur+7,18,18,g_Minimized?"v":"^",CLR_BG_CARD,CLR_TXT_LABEL);
@@ -2822,9 +2954,9 @@ void DesenharPainel() {
    double global_media = (open_symbols_count > 0) ? (global_total / open_symbols_count) : 0;
 
     // SEÇÃO VISÃO GLOBAL - TABULAR 4 COLUNAS
-    double fatBRL = InpTaxaBRL;
+    double fatBRL = g_TaxaBRLAtual;
     string accCurr = AccountInfoString(ACCOUNT_CURRENCY);
-    if(StringFind(accCurr, "USC") >= 0 || StringFind(accCurr, "Cent") >= 0 || StringFind(accCurr, "c") >= 0) fatBRL = InpTaxaBRL / 100.0;
+    if(StringFind(accCurr, "USC") >= 0 || StringFind(accCurr, "Cent") >= 0 || StringFind(accCurr, "c") >= 0) fatBRL = g_TaxaBRLAtual / 100.0;
     cur+=4;
     
     // 1. SALDO CONTA
@@ -2958,7 +3090,7 @@ void DesenharPainel() {
        } else {
           double targetVal = g_EquityCycleBaseBalance * (1.0 + currentTargetPct / 100.0);
           string sBaseVal = "", sTargetVal = "";
-          if(InpTaxaBRL > 0) {
+          if(g_TaxaBRLAtual > 0) {
              sBaseVal = "R$ " + DoubleToString(g_EquityCycleBaseBalance * fatBRL, 2);
              sTargetVal = "R$ " + DoubleToString(targetVal * fatBRL, 2);
           } else {
@@ -2982,7 +3114,7 @@ void DesenharPainel() {
           barStr += "]";
           
           string sProfitVal = "";
-          if(InpTaxaBRL > 0) {
+          if(g_TaxaBRLAtual > 0) {
              sProfitVal = "R$ " + DoubleToString(profitNet * fatBRL, 2);
           } else {
              sProfitVal = "$" + DoubleToString(profitNet, 2);
@@ -3019,7 +3151,7 @@ void DesenharPainel() {
    // CARD LOCAL (MOEDA ATUAL)
    PRect("bg_loc",px+pad-2,cur,pw-(pad*2)+4,110,C'22,26,35',CLR_LINE_SOFT,200,true); cur+=6;
 
-   string sBrlPLoc = (InpTaxaBRL>0) ? "  [R$ " + DoubleToString(lucroTotal*fatBRL, 2) + "]" : "";
+   string sBrlPLoc = (g_TaxaBRLAtual>0) ? "  [R$ " + DoubleToString(lucroTotal*fatBRL, 2) + "]" : "";
    PLabel("acc_pl_l",lx,cur,"P&L LOCAL"+sBrlPLoc,CLR_TXT_LABEL,8);
    string signalPL = (lucroTotal>=0) ? "+" : "";
    PLabelR("acc_pl_v",rx-2,cur,signalPL+DoubleToString(lucroTotal,2)+" USC",lucroTotal>=0?C'0,200,83':C'255,82,82',13,true); cur+=20;
@@ -3058,7 +3190,7 @@ void DesenharPainel() {
 
    // LUCRO ACUMULADO POR MOEDA
    ObjectDelete(0, PANEL_PREFIX+"sym_hist_bg"); // Garante a deleção do box antigo
-   string sBrlHLoc = (InpTaxaBRL>0) ? "  [R$ " + DoubleToString(g_HistLucroSymbol*fatBRL, 2) + "]" : "";
+   string sBrlHLoc = (g_TaxaBRLAtual>0) ? "  [R$ " + DoubleToString(g_HistLucroSymbol*fatBRL, 2) + "]" : "";
    PLabel("sym_hist_tit",lx,cur,"LUCRO LOCAL"+sBrlHLoc,CLR_TXT_LABEL,8);
    color txSym = g_HistLucroSymbol>=0 ? C'0,200,83' : C'255,82,82';
    string signalSym = (g_HistLucroSymbol>=0) ? "+" : "";
@@ -3649,6 +3781,7 @@ void LimparLinhasAnalise() {
       string nm = ObjectName(0, i, 0, -1);
       if(StringFind(nm, PANEL_PREFIX+"AN_") == 0) ObjectDelete(0, nm);
    }
+   ChartRedraw(0);
 }
 
 void LimparIndicadoresAnalise() {
@@ -4097,7 +4230,7 @@ void EnviarDadosWeb() {
    body += "\"account\":\"" + IntegerToString(acc) + "\",";
    body += "\"balance\":" + DoubleToString(bal, 2) + ",";
    body += "\"equity\":" + DoubleToString(eq, 2) + ",";
-   body += "\"brlRate\":" + DoubleToString(InpTaxaBRL, 2) + ",";
+   body += "\"brlRate\":" + DoubleToString(g_TaxaBRLAtual, 2) + ",";
    body += "\"dailyProfit\":" + DoubleToString(g_HistLucroHoje, 2) + ",";
    body += "\"floatingPl\":" + DoubleToString(pnl, 2) + ",";
    body += "\"totalProfit\":" + DoubleToString(g_HistLucroGlobal, 2) + ",";
@@ -4208,6 +4341,13 @@ void EnviarDadosWeb() {
 // TIMER
 //===================================================================
 void OnTimer() {
+   // [v3.40] Atualizar taxa BRL dinâmica a cada 60 segundos
+   static datetime lastBRLUpdate = 0;
+   if(TimeCurrent() - lastBRLUpdate >= 60) {
+      g_TaxaBRLAtual = ObterTaxaBRLDinamica();
+      lastBRLUpdate = TimeCurrent();
+   }
+ 
    // Atualizar cestos para garantir dados frescos no timer (mesmo sem ticks)
    AtualizarCestoBuy();
    AtualizarCestoSell();
