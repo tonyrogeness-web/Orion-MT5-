@@ -1303,6 +1303,22 @@ void VerificarCicloEquity() {
 
    // 1. Inicializa ou recupera o saldo de referência usando GlobalVariables do MT5 (segurança contra queda da VPS)
    string globalVarName = "OrionHedge_Global_EqBase";
+   string migratedVarName = "OrionHedge_Global_EqBaseMigrated";
+   
+   // [MIGRATION-FALLBACK] Uma única migração se o ciclo estiver ativo e houver base antiga salva
+   if(!GlobalVariableCheck(migratedVarName)) {
+      string oldVarName = "OrionHedge_EqBase_" + _Symbol;
+      if(GlobalVariableCheck(oldVarName)) {
+         double oldBase = GlobalVariableGet(oldVarName);
+         if(oldBase > 0) {
+            g_EquityCycleBaseBalance = oldBase;
+            GlobalVariableSet(globalVarName, g_EquityCycleBaseBalance);
+            GlobalVariableSet(migratedVarName, 1.0);
+            AddLog("CICLO: Migrada base antiga do simbolo " + _Symbol + " = " + DoubleToString(g_EquityCycleBaseBalance, 2) + " para a base global.");
+         }
+      }
+   }
+
    if(g_EquityCycleBaseBalance <= 0) {
       if(GlobalVariableCheck(globalVarName)) {
          double savedBase = GlobalVariableGet(globalVarName);
