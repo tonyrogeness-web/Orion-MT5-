@@ -1605,27 +1605,58 @@ int OnInit() {
     md.hour = 0; md.min = 0; md.sec = 0;
     datetime inicioDia = StructToTime(md);
 
-    if(GlobalVariableCheck("OrionHedge_Global_ResetTime")) {
-       g_InicioHistorico = (datetime)GlobalVariableGet("OrionHedge_Global_ResetTime");
-       if(g_InicioHistorico > inicioDia) {
-          g_InicioHistorico = inicioDia;
+    // 1. Inicializa g_InicioHistorico
+    if(InpFiltroDataInicio > 0) {
+       // Se o usuario configurou uma data nos inputs, ela tem prioridade total e sobrescreve qualquer variavel global
+       g_InicioHistorico = InpFiltroDataInicio;
+       GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
+    } else {
+       bool usarFallback = true;
+       if(GlobalVariableCheck("OrionHedge_Global_ResetTime")) {
+          g_InicioHistorico = (datetime)GlobalVariableGet("OrionHedge_Global_ResetTime");
+          if(g_InicioHistorico > inicioDia) {
+             g_InicioHistorico = inicioDia;
+             GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
+          } else if(g_InicioHistorico < inicioDia) {
+             // A variavel existe e e anterior a hoje (usuario ja operava antes e o resettime esta correto)
+             usarFallback = false;
+          }
+       }
+       
+       if(usarFallback) {
+          // Se nao existe a variavel global, ou se ela e igual a hoje a meia-noite (indicando reset por queda do PC),
+          // tenta recuperar automaticamente a data do primeiro deal no historico da conta.
+          if(HistorySelect(0, TimeCurrent()) && HistoryDealsTotal() > 0) {
+             ulong t = HistoryDealGetTicket(0);
+             g_InicioHistorico = (datetime)HistoryDealGetInteger(t, DEAL_TIME);
+          } else {
+             g_InicioHistorico = inicioDia;
+          }
           GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
        }
-    } else {
-       g_InicioHistorico = inicioDia;
-       GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
     }
 
+    // 2. Inicializa g_InicioHistoricoSymbol
     string symResetVar = "OrionHedge_ResetTime_" + _Symbol;
-    if(GlobalVariableCheck(symResetVar)) {
-       g_InicioHistoricoSymbol = (datetime)GlobalVariableGet(symResetVar);
-       if(g_InicioHistoricoSymbol > inicioDia) {
-          g_InicioHistoricoSymbol = inicioDia;
+    if(InpFiltroDataInicio > 0) {
+       g_InicioHistoricoSymbol = InpFiltroDataInicio;
+       GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
+    } else {
+       bool usarFallbackSym = true;
+       if(GlobalVariableCheck(symResetVar)) {
+          g_InicioHistoricoSymbol = (datetime)GlobalVariableGet(symResetVar);
+          if(g_InicioHistoricoSymbol > inicioDia) {
+             g_InicioHistoricoSymbol = inicioDia;
+             GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
+          } else if(g_InicioHistoricoSymbol < inicioDia) {
+             usarFallbackSym = false;
+          }
+       }
+       
+       if(usarFallbackSym) {
+          g_InicioHistoricoSymbol = g_InicioHistorico;
           GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
        }
-    } else {
-       g_InicioHistoricoSymbol = g_InicioHistorico;
-       GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
     }
 
     g_DealsCountCache = -1; // Forca recalculo imediato com nova janela de tempo
@@ -1681,6 +1712,8 @@ int OnInit() {
    g_RepDataFim = StructToTime(md_init);
    g_RepDataIni = g_RepDataFim - (30 * 86400);
 
+   AtualizarCestoBuy();
+   AtualizarCestoSell();
    return INIT_SUCCEEDED;
 }
 
@@ -4119,6 +4152,10 @@ void EnviarDadosWeb() {
 // TIMER
 //===================================================================
 void OnTimer() {
+   // Atualizar cestos para garantir dados frescos no timer (mesmo sem ticks)
+   AtualizarCestoBuy();
+   AtualizarCestoSell();
+
    // Sincronizar pause global (somente ativação forçada via Pânico)
    if(GlobalVariableCheck("OrionHedge_Global_BotPaused")) {
       if(GlobalVariableGet("OrionHedge_Global_BotPaused") > 0.5) {
@@ -4129,17 +4166,31 @@ void OnTimer() {
       }
    }
 
-   // Sincronizar data de reset global
-   if(GlobalVariableCheck("OrionHedge_Global_ResetTime")) {
-      datetime globReset = (datetime)GlobalVariableGet("OrionHedge_Global_ResetTime");
-      if(globReset > g_InicioHistorico) {
-         g_InicioHistorico = globReset;
-         g_InicioHistoricoSymbol = MathMax(g_InicioHistoricoSymbol, globReset);
-         GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
-         g_DealsCountCache = -1; // Forca recalcular
-         AddLog("Reset Global detectado. Estatísticas reiniciadas.");
-      }
-   }
+    // Sincronizar data de reset global
+    if(GlobalVariableCheck("OrionHedge_Global_ResetTime")) {
+       datetime globReset = (datetime)GlobalVariableGet("OrionHedge_Global_ResetTime");
+       
+       bool aceitarSinc = false;
+       if(globReset < g_InicioHistorico && globReset > 0) {
+          // O valor global e anterior ao nosso (contem mais historico). Aceitamos para expandir o historico!
+          aceitarSinc = true;
+       } else if(globReset > g_InicioHistorico) {
+          // O valor global e mais recente. So aceitamos se nao for o fallback de meia-noite (inicioDia),
+          // o que indica que foi um reset manual ou ciclo de equity e nao uma falha de reboot.
+          datetime inicioDia = NormalizarDia(TimeCurrent());
+          if(globReset != inicioDia) {
+             aceitarSinc = true;
+          }
+       }
+       
+       if(aceitarSinc) {
+          g_InicioHistorico = globReset;
+          g_InicioHistoricoSymbol = MathMax(g_InicioHistoricoSymbol, globReset);
+          GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
+          g_DealsCountCache = -1; // Forca recalcular
+          AddLog("Reset/Sincronização Global detectada. Data ajustada para: " + TimeToString(g_InicioHistorico, TIME_DATE|TIME_MINUTES));
+       }
+    }
 
    // ===== SINCRONIZAR FILTRO GLOBAL COMPARTILHADO [v3.31] =====
    // Sincroniza modo + data inicio + data fim para garantir range identico em TODOS os pares
