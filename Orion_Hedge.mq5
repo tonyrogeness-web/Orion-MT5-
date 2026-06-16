@@ -1659,24 +1659,33 @@ int OnInit() {
           usarFallback = false;
        } else if(GlobalVariableCheck("OrionHedge_Global_ResetTime")) {
           g_InicioHistorico = (datetime)GlobalVariableGet("OrionHedge_Global_ResetTime");
-          if(g_InicioHistorico > inicioDia) {
-             g_InicioHistorico = inicioDia;
+          if(g_InicioHistorico > TimeCurrent() + 60) { // Protecao apenas contra horario futuro corrompido
+             g_InicioHistorico = TimeCurrent();
              GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
              GuardarResetTime("global", g_InicioHistorico);
-          } else if(g_InicioHistorico < inicioDia) {
+          } else {
              usarFallback = false;
-             GuardarResetTime("global", g_InicioHistorico);
           }
        }
        
        if(usarFallback) {
-          // Se nao existe a variavel global nem o arquivo, ou se ela e igual a hoje a meia-noite (indicando reset por queda do PC),
-          // tenta recuperar automaticamente a data do primeiro deal no historico da conta.
-          if(HistorySelect(0, TimeCurrent()) && HistoryDealsTotal() > 0) {
-             ulong t = HistoryDealGetTicket(0);
-             g_InicioHistorico = (datetime)HistoryDealGetInteger(t, DEAL_TIME);
+          // Em caso de fallback (arquivo/global inexistentes ou corrompidos), tenta recuperar a data da posicao aberta mais antiga do EA
+          datetime oldestTime = 0;
+          for(int i = 0; i < PositionsTotal(); i++) {
+             ulong tck = PositionGetTicket(i);
+             if(tck > 0) {
+                long mag = PositionGetInteger(POSITION_MAGIC);
+                if(mag >= InpMagicNumberBase && mag <= InpMagicNumberBase + 999999) {
+                   datetime posTime = (datetime)PositionGetInteger(POSITION_TIME);
+                   if(oldestTime == 0 || posTime < oldestTime) oldestTime = posTime;
+                }
+             }
+          }
+          if(oldestTime > 0) {
+             g_InicioHistorico = oldestTime;
+             Print("[PERSISTENCIA] Fallback: Iniciando historico global na posicao aberta mais antiga: ", TimeToString(g_InicioHistorico));
           } else {
-             g_InicioHistorico = inicioDia;
+             g_InicioHistorico = TimeCurrent();
           }
           GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
           GuardarResetTime("global", g_InicioHistorico);
@@ -1698,18 +1707,33 @@ int OnInit() {
           usarFallbackSym = false;
        } else if(GlobalVariableCheck(symResetVar)) {
           g_InicioHistoricoSymbol = (datetime)GlobalVariableGet(symResetVar);
-          if(g_InicioHistoricoSymbol > inicioDia) {
-             g_InicioHistoricoSymbol = inicioDia;
+          if(g_InicioHistoricoSymbol > TimeCurrent() + 60) { // Protecao contra horario futuro corrompido
+             g_InicioHistoricoSymbol = TimeCurrent();
              GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
              GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
-          } else if(g_InicioHistoricoSymbol < inicioDia) {
+          } else {
              usarFallbackSym = false;
-             GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
           }
        }
        
        if(usarFallbackSym) {
-          g_InicioHistoricoSymbol = g_InicioHistorico;
+          datetime oldestTimeSym = 0;
+          for(int i = 0; i < PositionsTotal(); i++) {
+             ulong tck = PositionGetTicket(i);
+             if(tck > 0) {
+                long mag = PositionGetInteger(POSITION_MAGIC);
+                if(PositionGetString(POSITION_SYMBOL) == _Symbol && (mag == g_MagicBuy || mag == g_MagicSell)) {
+                   datetime posTime = (datetime)PositionGetInteger(POSITION_TIME);
+                   if(oldestTimeSym == 0 || posTime < oldestTimeSym) oldestTimeSym = posTime;
+                }
+             }
+          }
+          if(oldestTimeSym > 0) {
+             g_InicioHistoricoSymbol = oldestTimeSym;
+             Print("[PERSISTENCIA] Fallback: Iniciando historico local na posicao aberta mais antiga deste par: ", TimeToString(g_InicioHistoricoSymbol));
+          } else {
+             g_InicioHistoricoSymbol = g_InicioHistorico;
+          }
           GlobalVariableSet(symResetVar, (double)g_InicioHistoricoSymbol);
           GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
        }
