@@ -140,7 +140,7 @@ input double            InpNewsAtrMultiplier     = 1.4;                     // M
 
 input group "=== INTEGRACAO WEB ORION HEDGE ==="
 input bool   InpWebAtiva            = true;      // Ativar envio de dados para o Dashboard Web
-input string InpWebUrl              = "https://oriontech-mu.vercel.app/api/mt5/update"; // URL do servidor
+input string InpWebUrl              = "https://orion-theta-three.vercel.app/api/mt5/update"; // URL do servidor
 input string InpWebApiKey           = "aura_secret_token_123456"; // Token de Seguranca
 input int    InpWebIntervalo        = 30;        // Intervalo de envio em segundos
 
