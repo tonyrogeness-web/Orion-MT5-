@@ -4303,7 +4303,7 @@ void EnviarDadosWeb() {
    body += "\"account\":\"" + IntegerToString(acc) + "\",";
    body += "\"balance\":" + DoubleToString(bal, 2) + ",";
    body += "\"equity\":" + DoubleToString(eq, 2) + ",";
-   body += "\"brlRate\":" + DoubleToString(g_TaxaBRLAtual, 2) + ",";
+   body += "\"brlRate\":" + DoubleToString(g_TaxaBRLAtual, 4) + ",";
    body += "\"dailyProfit\":" + DoubleToString(g_HistLucroHoje, 2) + ",";
    body += "\"floatingPl\":" + DoubleToString(pnl, 2) + ",";
    body += "\"totalProfit\":" + DoubleToString(g_HistLucroGlobal, 2) + ",";
