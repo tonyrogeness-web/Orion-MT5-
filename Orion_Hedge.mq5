@@ -1252,11 +1252,17 @@ void FecharTudoCiclo(bool autoReset) {
    GuardarResetTime("global", g_InicioHistorico);
    GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
    
-   // Atualiza o saldo de referência para o novo saldo pós-fechamento
+   // [v3.40 Senior Sync] Atualiza o saldo de referência para o novo saldo pós-fechamento na base global
    double newBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    g_EquityCycleBaseBalance = newBalance;
-   string globalVarName = "OrionHedge_EqBase_" + _Symbol;
+   string globalVarName = "OrionHedge_Global_EqBase";
    GlobalVariableSet(globalVarName, g_EquityCycleBaseBalance);
+    
+   // Reset global de DD e Trailing no término do ciclo
+   GlobalVariableSet("OrionHedge_Global_DDReached10", 0.0);
+   GlobalVariableSet("OrionHedge_Global_DDReached20", 0.0);
+   GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
+   GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
 
    g_DealsCountCache = -1;
 
@@ -1296,7 +1302,7 @@ void VerificarCicloEquity() {
    if(balance <= 0) return;
 
    // 1. Inicializa ou recupera o saldo de referência usando GlobalVariables do MT5 (segurança contra queda da VPS)
-   string globalVarName = "OrionHedge_EqBase_" + _Symbol;
+   string globalVarName = "OrionHedge_Global_EqBase";
    if(g_EquityCycleBaseBalance <= 0) {
       if(GlobalVariableCheck(globalVarName)) {
          double savedBase = GlobalVariableGet(globalVarName);
@@ -1317,13 +1323,18 @@ void VerificarCicloEquity() {
       }
    }
 
-   // Se não houver posições em nenhum dos cestos, reseta picos de DD e mantém o saldo de referência sincronizado
-   if(g_BuyTotal == 0 && g_SellTotal == 0) {
+   // Se não houver posições em nenhum dos cestos de nenhuma moeda (ciclo global ocioso)
+   if(!TemPosicoesGlobais()) {
       g_DD_Reached10        = false;
       g_DD_Reached20        = false;
       g_TrailingActive      = false;
       g_PeakProfit          = 0.0;
       g_EquityCycleCooldownEnd = 0;
+      
+      GlobalVariableSet("OrionHedge_Global_DDReached10", 0.0);
+      GlobalVariableSet("OrionHedge_Global_DDReached20", 0.0);
+      GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
+      GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
 
       bool updated = false;
       // [FIX] A base do ciclo de equity agora permanece fixa para acumular lucros.
@@ -1361,8 +1372,18 @@ void VerificarCicloEquity() {
    
    // Calcula rebaixamento flutuante da conta (%)
    double dd_glb_pct = (balance > 0) ? MathAbs(MathMin(0.0, global_total)) / balance * 100.0 : 0.0;
-   if(dd_glb_pct >= 20.0) g_DD_Reached20 = true;
-   else if(dd_glb_pct >= 10.0) g_DD_Reached10 = true;
+   
+   if(dd_glb_pct >= 20.0) {
+      g_DD_Reached20 = true;
+      GlobalVariableSet("OrionHedge_Global_DDReached20", 1.0);
+   } else if(dd_glb_pct >= 10.0) {
+      g_DD_Reached10 = true;
+      GlobalVariableSet("OrionHedge_Global_DDReached10", 1.0);
+   }
+
+   // Sincronizar localmente flags se outro EA as ativou
+   if(GlobalVariableCheck("OrionHedge_Global_DDReached10") && GlobalVariableGet("OrionHedge_Global_DDReached10") > 0.5) g_DD_Reached10 = true;
+   if(GlobalVariableCheck("OrionHedge_Global_DDReached20") && GlobalVariableGet("OrionHedge_Global_DDReached20") > 0.5) g_DD_Reached20 = true;
 
    // 3. Calcula o lucro líquido real acumulado do ciclo (L. LÍQUIDO = Fechado + Aberto)
    double profitNet = g_HistLucroGlobal + global_total;
@@ -4356,6 +4377,15 @@ void EnviarDadosWeb() {
          GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
          GuardarResetTime("global", g_InicioHistorico);
          GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
+         
+         // [v3.40 Senior Sync] Reset do saldo base e DD global
+         g_EquityCycleBaseBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+         GlobalVariableSet("OrionHedge_Global_EqBase", g_EquityCycleBaseBalance);
+         GlobalVariableSet("OrionHedge_Global_DDReached10", 0.0);
+         GlobalVariableSet("OrionHedge_Global_DDReached20", 0.0);
+         GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
+         GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
+         
          g_DealsCountCache = -1; // Forca recalculacao imediata
       }
    }
@@ -4365,6 +4395,24 @@ void EnviarDadosWeb() {
 // TIMER
 //===================================================================
 void OnTimer() {
+   // [v3.40 Senior Sync] Sincronizar variáveis globais do Ciclo de Equity entre todos os gráficos
+   if(GlobalVariableCheck("OrionHedge_Global_EqBase")) {
+      double savedBase = GlobalVariableGet("OrionHedge_Global_EqBase");
+      if(savedBase > 0) g_EquityCycleBaseBalance = savedBase;
+   }
+   if(GlobalVariableCheck("OrionHedge_Global_TrailingActive")) {
+      g_TrailingActive = (GlobalVariableGet("OrionHedge_Global_TrailingActive") > 0.5);
+   }
+   if(GlobalVariableCheck("OrionHedge_Global_PeakProfit")) {
+      g_PeakProfit = GlobalVariableGet("OrionHedge_Global_PeakProfit");
+   }
+   if(GlobalVariableCheck("OrionHedge_Global_DDReached10")) {
+      g_DD_Reached10 = (GlobalVariableGet("OrionHedge_Global_DDReached10") > 0.5);
+   }
+   if(GlobalVariableCheck("OrionHedge_Global_DDReached20")) {
+      g_DD_Reached20 = (GlobalVariableGet("OrionHedge_Global_DDReached20") > 0.5);
+   }
+
    // [v3.40] Atualizar taxa BRL dinâmica a cada 60 segundos
    static datetime lastBRLUpdate = 0;
    if(TimeCurrent() - lastBRLUpdate >= 60) {
@@ -4585,6 +4633,13 @@ void FecharTudo() {
    g_PeakProfit          = 0.0;
    g_EquityCycleBaseBalance = -1.0;
    g_EquityCycleCooldownEnd = 0;
+   
+   // [v3.40 Senior Sync] Reset global de base e DD no panico global
+   GlobalVariableSet("OrionHedge_Global_EqBase", -1.0);
+   GlobalVariableSet("OrionHedge_Global_DDReached10", 0.0);
+   GlobalVariableSet("OrionHedge_Global_DDReached20", 0.0);
+   GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
+   GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
    
    // Resets para evitar origens stale e logs enganosos de drawdown apos panico global
    g_BuyZoneOrigin       = 0;
