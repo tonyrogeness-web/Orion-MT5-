@@ -234,6 +234,15 @@ datetime g_SellLastBarTime = 0;   // [v3.25+] Controle de 1 recompra por candle
 bool     g_AguardandoSell  = false;
 datetime g_ConfirmSell     = 0;
 
+// === SAÍDA ZERO A ZERO (GRADE) ===
+bool     g_BuySaidaZeroAtiva  = false;
+bool     g_SellSaidaZeroAtiva = false;
+
+// Controle de confirmação de cliques na grade
+int      g_GradeConfirmLvl     = -1;
+bool     g_GradeConfirmIsBuy   = false;
+datetime g_GradeConfirmTime    = 0;
+
 // Historico
 int      g_DealsCountCache = -1;
 // [BUG #6 FIX] Variaveis removidas Ã¢â‚¬â€ nao sao usadas em nenhum calculo
@@ -4858,10 +4867,140 @@ void FecharLocal() {
 }
 
 //===================================================================
+// SOS MANUAL: FECHAR RECOMPRA NO ZERO A ZERO
+//===================================================================
+void FecharRecompraNoZero(bool isBuyRescue, int level) {
+   int magicPerdedor = isBuyRescue ? g_MagicBuy : g_MagicSell;
+   int magicVencedor = isBuyRescue ? g_MagicSell : g_MagicBuy;
+   string targetComm = (isBuyRescue ? "OH_B" : "OH_S") + IntegerToString(level);
+   
+   // 1. Achar a ordem do nível selecionado e calcular o prejuízo
+   ulong rescueTicket = 0;
+   double rescueLoss = 0.0;
+   
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
+      ulong t = PositionGetTicket(i);
+      if(t > 0 && PositionSelectByTicket(t)) {
+         if(PositionGetInteger(POSITION_MAGIC) == magicPerdedor && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+            if(PositionGetString(POSITION_COMMENT) == targetComm) {
+               rescueTicket = t;
+               rescueLoss = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+               break;
+            }
+         }
+      }
+   }
+   
+   if(rescueTicket == 0) {
+      AddLog("[S.O.S] Erro: Recompra N" + IntegerToString(level) + " nao foi encontrada para fechamento.");
+      return;
+   }
+   
+   // Se a posição já for positiva (sem prejuízo), fecha ela direto sem precisar abater lucro do outro cesto
+   if(rescueLoss >= 0) {
+      trade.PositionClose(rescueTicket);
+      AddLog("[S.O.S] Recompra N" + IntegerToString(level) + " ja estava positiva e foi fechada diretamente.");
+      return;
+   }
+   
+   double absLoss = MathAbs(rescueLoss);
+   
+   // 2. Calcular lucro do cesto vencedor oposto
+   double lucroVencedor = 0.0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
+      ulong t = PositionGetTicket(i);
+      if(t > 0 && PositionSelectByTicket(t)) {
+         if(PositionGetInteger(POSITION_MAGIC) == magicVencedor && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+            lucroVencedor += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+         }
+      }
+   }
+   
+   // 3. Validar se o lucro cobre o prejuízo
+   if(lucroVencedor <= 0) {
+      AddLog("[S.O.S] Bloqueado: Nao ha lucro aberto no cesto oposto para abater esta recompra.");
+      return;
+   }
+   
+   if(lucroVencedor < absLoss) {
+      AddLog("[S.O.S] Bloqueado: Lucro do cesto oposto (" + DoubleToString(lucroVencedor, 2) + " USC) e insuficiente para abater a Recompra N" + IntegerToString(level) + " (" + DoubleToString(absLoss, 2) + " USC).");
+      return;
+   }
+   
+   // 4. Executar os fechamentos no mesmo tick (Net Zero Loss)
+   AddLog("[S.O.S] Executando abatimento no zero: Fechando Recompra N" + IntegerToString(level) + " (" + DoubleToString(rescueLoss, 2) + " USC) financiando com cesto oposto (" + DoubleToString(lucroVencedor, 2) + " USC).");
+   
+   // Fecha a recompra ruim
+   trade.PositionClose(rescueTicket);
+   
+   // Fecha o cesto vencedor para realizar o lucro compensador
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
+      ulong t = PositionGetTicket(i);
+      if(t > 0 && PositionSelectByTicket(t)) {
+         if(PositionGetInteger(POSITION_MAGIC) == magicVencedor && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+            trade.PositionClose(t);
+         }
+      }
+   }
+   
+   // Reset de variáveis de trailing e zonas para segurança
+   if(isBuyRescue) {
+      g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
+   } else {
+      g_SellZoneOrigin = 0; g_SellEmTrailing = false;
+   }
+}
+
+//===================================================================
 // CLICK EVENTS
 //===================================================================
 void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp) {
    if(id==CHARTEVENT_OBJECT_CLICK) {
+      // Cliques na grade de caixinhas para fechamento seguro no zero
+      if(StringFind(sp, "buy_grade_b") == 0 || StringFind(sp, "sel_grade_b") == 0) {
+         bool isBuyClick = (StringFind(sp, "buy_grade_b") == 0);
+         int offset = 11;
+         int idx = (int)StringToInteger(StringSubstr(sp, offset));
+         int lvl = idx + 1;
+         
+         // Verificar se esse nível está de fato aberto antes de prosseguir
+         bool lvlAberto = false;
+         string targetComm = (isBuyClick ? "OH_B" : "OH_S") + IntegerToString(lvl);
+         for(int i = PositionsTotal() - 1; i >= 0; i--) {
+            ulong t = PositionGetTicket(i);
+            if(t > 0 && PositionSelectByTicket(t)) {
+               long mag = PositionGetInteger(POSITION_MAGIC);
+               if(mag == (isBuyClick ? g_MagicBuy : g_MagicSell)) {
+                  if(PositionGetString(POSITION_COMMENT) == targetComm) {
+                     lvlAberto = true;
+                     break;
+                  }
+               }
+            }
+         }
+         
+         if(!lvlAberto) {
+            AddLog("GRADE MANUAL: Nivel N" + IntegerToString(lvl) + " nao esta aberto.");
+            return;
+         }
+         
+         // Lógica de confirmação de 3 segundos
+         if(g_GradeConfirmLvl == lvl && g_GradeConfirmIsBuy == isBuyClick && TimeCurrent() - g_GradeConfirmTime <= 3) {
+            // Chamada da função de fechamento no zero
+            FecharRecompraNoZero(isBuyClick, lvl);
+            g_GradeConfirmLvl = -1;
+            g_GradeConfirmTime = 0;
+         } else {
+            g_GradeConfirmLvl = lvl;
+            g_GradeConfirmIsBuy = isBuyClick;
+            g_GradeConfirmTime = TimeCurrent();
+            AddLog("! CLIQUE SEGURO: Clique novamente em 3s na caixinha N" + IntegerToString(lvl) + " (" + (isBuyClick ? "COMPRA" : "VENDA") + ") para fechar no ZERO usando lucro oposto.");
+         }
+         
+         DesenharPainel();
+         ChartRedraw(0);
+         return;
+      }
       // Bloquear seletor de filtros se o Trailing de Patrimonio estiver ativo
       bool trailingAtivo = false;
       if(trailingAtivo && StringFind(sp, PANEL_PREFIX+"btn_flt_") == 0) {
