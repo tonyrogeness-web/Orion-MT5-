@@ -451,9 +451,9 @@ void AtualizarLucroHoje() {
          datetime dt = (datetime)HistoryDealGetInteger(t, DEAL_TIME);
          
          bool isOrionDeal = false;
-         if(dt >= g_InicioHistorico) {
+         if(dealMagic >= InpMagicNumberBase && dealMagic <= InpMagicNumberBase + 999999) {
             isOrionDeal = true;
-         } else if(dealMagic >= InpMagicNumberBase && dealMagic <= InpMagicNumberBase + 999999) {
+         } else if(dealMagic == 0 && dt >= g_InicioHistorico) {
             isOrionDeal = true;
          }
          
@@ -551,7 +551,8 @@ void AtualizarHistoricoGlobal() {
             long dealMagic = HistoryDealGetInteger(t, DEAL_MAGIC);
             bool isSymbolDeal = false;
             if(dealTime >= g_InicioHistoricoSymbol) {
-               isSymbolDeal = (HistoryDealGetString(t, DEAL_SYMBOL) == _Symbol);
+               isSymbolDeal = (HistoryDealGetString(t, DEAL_SYMBOL) == _Symbol &&
+                               (dealMagic == 0 || (dealMagic >= InpMagicNumberBase && dealMagic <= InpMagicNumberBase + 999999)));
             } else {
                isSymbolDeal = (HistoryDealGetString(t, DEAL_SYMBOL) == _Symbol &&
                                (dealMagic == g_MagicBuy || dealMagic == g_MagicSell));
@@ -1217,6 +1218,8 @@ void FecharTudoCiclo(bool autoReset) {
       if(retry < 4) Sleep(200); // Aguarda 200ms para processamento do servidor
    }
    
+   Sleep(300); // Aguarda tempo adicional para garantir que o saldo terminal foi atualizado pelo broker
+   
    g_PanicoAguardando=false;
    g_AguardandoBuy=false; g_ConfirmBuy=0;
    g_AguardandoSell=false; g_ConfirmSell=0;
@@ -1305,9 +1308,16 @@ void VerificarCicloEquity() {
    string globalVarName = "OrionHedge_Global_EqBase";
    string migratedVarName = "OrionHedge_Global_EqBaseMigrated_V2";
    
+   // Check if global base is already set and valid
+   bool hasGlobalBase = false;
+   if(GlobalVariableCheck(globalVarName)) {
+      double curBase = GlobalVariableGet(globalVarName);
+      if(curBase > 0) hasGlobalBase = true;
+   }
+   
    // [MIGRATION-FALLBACK] Uma única migração se o ciclo estiver ativo e houver base antiga salva
    // Usamos TemPosicoesLocais() para garantir que apenas o gráfico com posições ativas faça a migração inicial.
-   if(!GlobalVariableCheck(migratedVarName) && TemPosicoesLocais()) {
+   if(!hasGlobalBase && !GlobalVariableCheck(migratedVarName) && TemPosicoesLocais()) {
       string oldVarName = "OrionHedge_EqBase_" + _Symbol;
       if(GlobalVariableCheck(oldVarName)) {
          double oldBase = GlobalVariableGet(oldVarName);
@@ -1317,17 +1327,6 @@ void VerificarCicloEquity() {
             GlobalVariableSet(migratedVarName, 1.0);
             AddLog("CICLO: Migrada base antiga do simbolo " + _Symbol + " = " + DoubleToString(g_EquityCycleBaseBalance, 2) + " para a base global.");
          }
-      }
-   }
-
-   // [AUTO-CORRECTION] Correção temporária para o bug do race condition: se a base global atual
-   // estiver em ~93688.70 (saldo incorreto carregado no restart), força a restauração para a base histórica correta.
-   if(GlobalVariableCheck(globalVarName)) {
-      double curBase = GlobalVariableGet(globalVarName);
-      if(MathAbs(curBase - 93688.70) < 5.0) {
-         g_EquityCycleBaseBalance = 93934.23;
-         GlobalVariableSet(globalVarName, g_EquityCycleBaseBalance);
-         AddLog("CICLO: Corrigida base global errada do race condition (" + DoubleToString(curBase, 2) + ") para a base histórica correta (93934.23 USC).");
       }
    }
 
@@ -2716,20 +2715,24 @@ double ObterTaxaBRLDinamica() {
       }
    }
    
-   // Se tudo falhar, gera relatório de diagnóstico para descobrirmos os nomes dos símbolos BRL
-   int fileHandle = FileOpen("orion_brl_symbols.txt", FILE_WRITE|FILE_TXT|FILE_ANSI);
-   if(fileHandle != INVALID_HANDLE) {
-      FileWriteString(fileHandle, "=== DIAGNOSTICO DE SIMBOLOS BRL ===\n");
-      FileWriteString(fileHandle, "Total de simbolos: " + IntegerToString(totalSymbols) + "\n");
-      for(int i = 0; i < totalSymbols; i++) {
-         string symName = SymbolName(i, false);
-         string symUpper = symName;
-         StringToUpper(symUpper);
-         if(StringFind(symUpper, "BRL") >= 0) {
-            FileWriteString(fileHandle, "Simbolo com BRL: " + symName + "\n");
+   // Se tudo falhar, gera relatório de diagnóstico para descobrirmos os nomes dos símbolos BRL (apenas uma vez para economizar disco)
+   static bool diagnosticWritten = false;
+   if(!diagnosticWritten) {
+      int fileHandle = FileOpen("orion_brl_symbols.txt", FILE_WRITE|FILE_TXT|FILE_ANSI);
+      if(fileHandle != INVALID_HANDLE) {
+         FileWriteString(fileHandle, "=== DIAGNOSTICO DE SIMBOLOS BRL ===\n");
+         FileWriteString(fileHandle, "Total de simbolos: " + IntegerToString(totalSymbols) + "\n");
+         for(int i = 0; i < totalSymbols; i++) {
+            string symName = SymbolName(i, false);
+            string symUpper = symName;
+            StringToUpper(symUpper);
+            if(StringFind(symUpper, "BRL") >= 0) {
+               FileWriteString(fileHandle, "Simbolo com BRL: " + symName + "\n");
+            }
          }
+         FileClose(fileHandle);
       }
-      FileClose(fileHandle);
+      diagnosticWritten = true;
    }
    
    return InpTaxaBRL;
@@ -3105,18 +3108,8 @@ void DesenharPainel() {
     // Separador 4 (Entre Rendimentos e Risco Flutuante)
     PRect("sep_liq", lx, cur, thm_w, 1, CLR_LINE_SOFT, -1, 204); cur += 10;
 
-   // BUG #9 FIX: Loop redundante removido — LimparConteudoPainel() ja faz esta limpeza
-   // ao trocar entre tela principal e tela de configuracoes (g_ShowSettings).
-   // Limpa residuos de objetos antigos do filtro
-   for(int fi=0; fi<5; fi++) ObjectDelete(0,PANEL_PREFIX+"btn_flt_"+IntegerToString(fi));
-   ObjectDelete(0,PANEL_PREFIX+"btn_flt_open");
-   ObjectDelete(0,PANEL_PREFIX+"btn_flt_close");
-   ObjectDelete(0,PANEL_PREFIX+"cfg_flt_sec");
-   ObjectDelete(0,PANEL_PREFIX+"cfg_flt_box");
-   ObjectDelete(0,PANEL_PREFIX+"cfg_flt_t");
-   ObjectDelete(0,PANEL_PREFIX+"cfg_flt_f");
-   ObjectDelete(0,PANEL_PREFIX+"cfg_flt_h");
-   ObjectDelete(0,PANEL_PREFIX+"cfg_flt_a");
+   // BUG #12: Exclusão redundante removida para evitar flicker visual.
+   // LimparConteudoPainel() ja limpa os botoes de filtro na transicao de tela (g_ShowSettings).
 
    // DRAWDOWN GLOBAL - barra 3 zonas pre-pintadas (verde→amarelo→vermelho)
    double dd_glb_pct = (balance>0) ? MathAbs(MathMin(0.0, global_total))/balance*100.0 : 0.0;
@@ -4098,33 +4091,116 @@ void DesenharLegendaAnalise(int count, string &texts[], color &clrs[], string di
 //===================================================================
 datetime g_WebUltimoEnvio = 0;
 
-void ParseCommandIds(string resp) {
-   int pos = 0;
-   while((pos = StringFind(resp, "\"id\":", pos)) >= 0) {
-      pos += 5; // move past "\"id\":"
-      int endPos = pos;
-      while(endPos < StringLen(resp)) {
-         ushort charCode = StringGetCharacter(resp, endPos);
-         if(charCode >= '0' && charCode <= '9') {
-            endPos++;
-         } else {
-            break;
-         }
+string ExtractJsonString(string block, string key) {
+   string search = "\"" + key + "\":\"";
+   int p = StringFind(block, search);
+   if(p < 0) return "";
+   p += StringLen(search);
+   int endP = StringFind(block, "\"", p);
+   if(endP < 0) return "";
+   return StringSubstr(block, p, endP - p);
+}
+
+long ExtractJsonInteger(string block, string key) {
+   string search = "\"" + key + "\":";
+   int p = StringFind(block, search);
+   if(p < 0) return 0;
+   p += StringLen(search);
+   int endP = p;
+   while(endP < StringLen(block)) {
+      ushort c = StringGetCharacter(block, endP);
+      if(c >= '0' && c <= '9') endP++;
+      else break;
+   }
+   if(endP > p) {
+      return StringToInteger(StringSubstr(block, p, endP - p));
+   }
+   return 0;
+}
+
+int ObterNivelPosicao(string comment, string typeStr) {
+   string prefix = (typeStr == "BUY") ? "OH_B" : "OH_S";
+   if(StringSubstr(comment, 0, 4) == prefix) {
+      return (int)StringToInteger(StringSubstr(comment, 4));
+   }
+   return 1; // Fallback para nivel 1
+}
+
+void ProcessarComandosServidor(string resp) {
+   int startPos = 0;
+   while(true) {
+      int pos = StringFind(resp, "{\"id\":", startPos);
+      if(pos < 0) break;
+      
+      int endPos = StringFind(resp, "}", pos);
+      if(endPos < 0) break;
+      
+      string block = StringSubstr(resp, pos, endPos - pos + 1);
+      startPos = endPos + 1; // Move past this block
+      
+      long cmdId = ExtractJsonInteger(block, "id");
+      if(cmdId <= 0) continue;
+      
+      string command = ExtractJsonString(block, "command");
+      string symbol = ExtractJsonString(block, "symbol");
+      
+      bool applicable = false;
+      if(command == "PANIC_GLOBAL" || command == "PAUSE" || command == "RESUME" || command == "RESET_STATS") {
+         applicable = true;
+      } else if(command == "PANIC_LOCAL" && symbol == _Symbol) {
+         applicable = true;
       }
-      if(endPos > pos) {
-         string idStr = StringSubstr(resp, pos, endPos - pos);
-         long cmdId = StringToInteger(idStr);
-         if(cmdId > 0) {
-            bool dup = false;
-            for(int j=0; j<g_ExecCmdCount; j++) {
-               if(g_ExecCmdIds[j] == (int)cmdId) { dup = true; break; }
-            }
-            if(!dup) {
-               ArrayResize(g_ExecCmdIds, g_ExecCmdCount + 1);
-               g_ExecCmdIds[g_ExecCmdCount] = (int)cmdId;
-               g_ExecCmdCount++;
-            }
+      
+      if(!applicable) continue;
+      
+      // Executa o comando correspondente
+      if(command == "PANIC_GLOBAL") {
+         AddLog("[WEB] COMANDO REMOTO: PANICO GLOBAL recebido!");
+         FecharTudo();
+      } else if(command == "PANIC_LOCAL") {
+         AddLog("[WEB] COMANDO REMOTO: PANICO LOCAL para " + _Symbol + " recebido!");
+         FecharLocal();
+         g_BotPaused = true;
+      } else if(command == "PAUSE") {
+         if(!g_BotPaused) {
+            g_BotPaused = true;
+            GlobalVariableSet("OrionHedge_Global_BotPaused", 1.0);
+            AddLog("[WEB] COMANDO REMOTO: PAUSAR recebido.");
          }
+      } else if(command == "RESUME") {
+         if(g_BotPaused) {
+            g_BotPaused = false;
+            GlobalVariableSet("OrionHedge_Global_BotPaused", 0.0);
+            AddLog("[WEB] COMANDO REMOTO: RETOMAR recebido.");
+         }
+      } else if(command == "RESET_STATS") {
+         AddLog("[WEB] COMANDO REMOTO: RESET_STATS recebido.");
+         g_InicioHistorico = TimeCurrent();
+         g_InicioHistoricoSymbol = g_InicioHistorico;
+         GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
+         GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
+         GuardarResetTime("global", g_InicioHistorico);
+         GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
+         
+         g_EquityCycleBaseBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+         GlobalVariableSet("OrionHedge_Global_EqBase", g_EquityCycleBaseBalance);
+         GlobalVariableSet("OrionHedge_Global_DDReached10", 0.0);
+         GlobalVariableSet("OrionHedge_Global_DDReached20", 0.0);
+         GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
+         GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
+         
+         g_DealsCountCache = -1; // Forca recalculacao imediata
+      }
+      
+      // Adiciona o ID do comando executado para confirmacao
+      bool dup = false;
+      for(int j = 0; j < g_ExecCmdCount; j++) {
+         if(g_ExecCmdIds[j] == (int)cmdId) { dup = true; break; }
+      }
+      if(!dup) {
+         ArrayResize(g_ExecCmdIds, g_ExecCmdCount + 1);
+         g_ExecCmdIds[g_ExecCmdCount] = (int)cmdId;
+         g_ExecCmdCount++;
       }
    }
 }
@@ -4137,8 +4213,21 @@ void EnviarDadosWeb() {
    double bal    = AccountInfoDouble(ACCOUNT_BALANCE);
    double eq     = AccountInfoDouble(ACCOUNT_EQUITY);
    long   acc    = AccountInfoInteger(ACCOUNT_LOGIN);
-   double pnl    = (g_BuyLucro + g_BuySwap) + (g_SellLucro + g_SellSwap);
-   double ddPct  = (bal > 0) ? (MathAbs(MathMin(0.0, pnl)) / bal * 100.0) : 0.0;
+   
+   // BUG #10: Calcular PNL global consolidado de todas as moedas operadas pelo Orion
+   double global_profit = 0, global_swap = 0;
+   for(int i = 0; i < PositionsTotal(); i++) {
+      ulong tck = PositionGetTicket(i);
+      if(tck > 0) {
+         long mag = PositionGetInteger(POSITION_MAGIC);
+         if(mag >= InpMagicNumberBase && mag <= InpMagicNumberBase + 999999) {
+            global_swap   += PositionGetDouble(POSITION_SWAP);
+            global_profit += PositionGetDouble(POSITION_PROFIT);
+         }
+      }
+   }
+   double global_total = global_profit + global_swap;
+   double ddPct  = (bal > 0) ? (MathAbs(MathMin(0.0, global_total)) / bal * 100.0) : 0.0;
    string status = g_BotPaused ? "PAUSED" : "RUNNING";
 
    // Construir JSON de posicoes abertas
@@ -4157,11 +4246,15 @@ void EnviarDadosWeb() {
       double curPrice = PositionGetDouble(POSITION_PRICE_CURRENT);
       double tp   = (dir == "BUY") ? g_BuyAlvo : g_SellAlvo;
       double sl   = (dir == "BUY") ? g_BuyProxPreco : g_SellProxPreco;
-      long grade  = PositionGetInteger(POSITION_IDENTIFIER); 
+      
+      // BUG #15: POSITION_IDENTIFIER substituído pelo nível real da grade a partir do comentário
+      string comment = PositionGetString(POSITION_COMMENT);
+      int level = ObterNivelPosicao(comment, dir);
+      
       if(cnt > 0) tradesJson += ",";
       tradesJson += "{\"ticket\":\"" + IntegerToString(tk) + "\",\"symbol\":\"" + _Symbol + "\",\"type\":\"" + dir + "\",\"volume\":" + DoubleToString(vol,2)
                  + ",\"entryPrice\":" + DoubleToString(ep,5) + ",\"currentPrice\":" + DoubleToString(curPrice,5) + ",\"currentProfit\":" + DoubleToString(prof,2)
-                 + ",\"tp\":" + DoubleToString(tp,5) + ",\"sl\":" + DoubleToString(sl,5) + ",\"grade\":" + IntegerToString(grade)
+                 + ",\"tp\":" + DoubleToString(tp,5) + ",\"sl\":" + DoubleToString(sl,5) + ",\"grade\":" + IntegerToString(level)
                  + ",\"magicNumber\":" + IntegerToString((int)mag) + "}";
       cnt++;
    }
@@ -4244,10 +4337,42 @@ void EnviarDadosWeb() {
       }
    }
 
-   double runningBal = bal;
+   // BUG #3: Calcular saldo inicial do período de 30 dias subtraindo os lucros das transações no período
+   double totalProfitInWindow = 0.0;
    if(HistorySelect(timeLimit, TimeCurrent())) {
       int dealsTotal = HistoryDealsTotal();
-      for(int i = dealsTotal - 1; i >= 0; i--) {
+      for(int i = 0; i < dealsTotal; i++) {
+         ulong ticket = HistoryDealGetTicket(i);
+         if(ticket > 0) {
+            long entry = HistoryDealGetInteger(ticket, DEAL_ENTRY);
+            if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT) {
+               long mag = HistoryDealGetInteger(ticket, DEAL_MAGIC);
+               datetime dt = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
+               
+               bool isOrionDeal = false;
+               if(dt >= g_InicioHistorico) {
+                  isOrionDeal = true;
+               } else if(mag >= InpMagicNumberBase && mag <= InpMagicNumberBase + 999999) {
+                  isOrionDeal = true;
+               }
+               
+               if(isOrionDeal) {
+                  double prof = HistoryDealGetDouble(ticket, DEAL_PROFIT);
+                  double swap = HistoryDealGetDouble(ticket, DEAL_SWAP);
+                  double comm = HistoryDealGetDouble(ticket, DEAL_COMMISSION);
+                  totalProfitInWindow += prof + swap + comm;
+               }
+            }
+         }
+      }
+   }
+   
+   double runningBal = bal - totalProfitInWindow;
+   
+   // Loop progressivo (cronológico) para aplicar o lucro e obter o saldo ao fim de cada dia
+   if(HistorySelect(timeLimit, TimeCurrent())) {
+      int dealsTotal = HistoryDealsTotal();
+      for(int i = 0; i < dealsTotal; i++) {
          ulong ticket = HistoryDealGetTicket(i);
          if(ticket > 0) {
             long entry = HistoryDealGetInteger(ticket, DEAL_ENTRY);
@@ -4268,23 +4393,22 @@ void EnviarDadosWeb() {
                   double comm = HistoryDealGetDouble(ticket, DEAL_COMMISSION);
                   double totalDealProfit = prof + swap + comm;
                   
+                  runningBal += totalDealProfit;
+                  
                   datetime dealDay = NormalizarDia(dt);
-                  for(int k = 29; k >= 0; k--) {
+                  for(int k = 0; k < 30; k++) {
                      if(dailyData[k].date == dealDay) {
-                        if(dailyData[k].balance <= 0.0) {
-                           dailyData[k].balance = runningBal;
-                        }
+                        dailyData[k].balance = runningBal; // Armazena o saldo mais recente do dia
                         break;
                      }
                   }
-                  runningBal -= totalDealProfit;
                }
             }
          }
       }
    }
    
-   double lastKnownBalance = runningBal;
+   double lastKnownBalance = bal - totalProfitInWindow; // Caso não haja operações nos primeiros dias, começa do saldo inicial
    for(int k = 0; k < 30; k++) {
       if(dailyData[k].balance > 0.0) {
          lastKnownBalance = dailyData[k].balance;
@@ -4303,7 +4427,13 @@ void EnviarDadosWeb() {
    body += "\"account\":\"" + IntegerToString(acc) + "\",";
    body += "\"balance\":" + DoubleToString(bal, 2) + ",";
    body += "\"equity\":" + DoubleToString(eq, 2) + ",";
-   body += "\"brlRate\":" + DoubleToString(g_TaxaBRLAtual, 4) + ",";
+   // BUG #7: brlRate compensando o fator centavo (multiplicando por 100 se for conta padrão)
+   double brlRateToSend = g_TaxaBRLAtual;
+   string accCurr = AccountInfoString(ACCOUNT_CURRENCY);
+   if(StringFind(accCurr, "USC") < 0 && StringFind(accCurr, "Cent") < 0 && StringFind(accCurr, "c") < 0) {
+      brlRateToSend = g_TaxaBRLAtual * 100.0;
+   }
+   body += "\"brlRate\":" + DoubleToString(brlRateToSend, 4) + ",";
    body += "\"dailyProfit\":" + DoubleToString(g_HistLucroHoje, 2) + ",";
    body += "\"floatingPl\":" + DoubleToString(pnl, 2) + ",";
    body += "\"totalProfit\":" + DoubleToString(g_HistLucroGlobal, 2) + ",";
@@ -4372,50 +4502,10 @@ void EnviarDadosWeb() {
    g_ExecCmdCount = 0;
    ArrayFree(g_ExecCmdIds);
 
-   // Processar resposta: verifica se existe comando pendente
+   // Processar resposta: verifica e executa comandos aplicaveis com token
    if(ArraySize(result) > 2) {
       string resp = CharArrayToString(result);
-      
-      // Armazena novos IDs de comandos recebidos para confirmacao no proximo envio
-      ParseCommandIds(resp);
-      
-      // 1. Panico
-      if(StringFind(resp, "\"command\":\"PANIC_GLOBAL\"") >= 0) {
-         AddLog("[WEB] COMANDO REMOTO: PANICO GLOBAL recebido!");
-         FecharTudo();
-      } else if(VerificarComandoLocal(resp, "PANIC_LOCAL", _Symbol)) {
-         AddLog("[WEB] COMANDO REMOTO: PANICO LOCAL para " + _Symbol + " recebido!");
-         FecharLocal();
-         g_BotPaused = true;
-      }
-      
-      // 2. Pausa / Retomada
-      if(StringFind(resp, "\"command\":\"PAUSE\"") >= 0) {
-         if(!g_BotPaused) { g_BotPaused = true; AddLog("[WEB] COMANDO REMOTO: PAUSAR recebido."); }
-      } else if(StringFind(resp, "\"command\":\"RESUME\"") >= 0) {
-         if(g_BotPaused) { g_BotPaused = false; AddLog("[WEB] COMANDO REMOTO: RETOMAR recebido."); }
-      }
-      
-      // 3. Reset de Estatisticas
-      if(StringFind(resp, "\"command\":\"RESET_STATS\"") >= 0) {
-         AddLog("[WEB] COMANDO REMOTO: RESET_STATS recebido.");
-         g_InicioHistorico = TimeCurrent();
-         g_InicioHistoricoSymbol = g_InicioHistorico;
-         GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
-         GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
-         GuardarResetTime("global", g_InicioHistorico);
-         GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
-         
-         // [v3.40 Senior Sync] Reset do saldo base e DD global
-         g_EquityCycleBaseBalance = AccountInfoDouble(ACCOUNT_BALANCE);
-         GlobalVariableSet("OrionHedge_Global_EqBase", g_EquityCycleBaseBalance);
-         GlobalVariableSet("OrionHedge_Global_DDReached10", 0.0);
-         GlobalVariableSet("OrionHedge_Global_DDReached20", 0.0);
-         GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
-         GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
-         
-         g_DealsCountCache = -1; // Forca recalculacao imediata
-      }
+      ProcessarComandosServidor(resp);
    }
 }
 
