@@ -44,9 +44,9 @@ input ENUM_TIMEFRAMES InpBaseTF    = PERIOD_H1;
 input ENUM_TIMEFRAMES InpTrendTF   = PERIOD_M15;
 
 input group "=== GRADE HEDGE (BALANCEADO) ==="
-input double InpLotInitial         = 0.015;  // Lote Base (Ajustado p/ gerar 0.18 finais)
+input double InpLotInitial         = 0.012;  // Lote Base (Reduzido para 0.012 - maior seguranca)
 input double InpLotMultiplier      = 1.50;   // Multiplicador Recompra (Forte no sufoco)
-input int    InpMaxOrdens          = 6;      // Max Niveis por cesto [v3.24: 5->6 recuperacao rapida]
+input int    InpMaxOrdens          = 5;      // Max Niveis por cesto [Reduzido de 6 para 5 - maior conservadorismo]
 input double InpTakeProfitDinheiro = 1.50;   // Alvo por cesto (USC) (Gira rapido e poe no bolso)
 input double InpHedgeLotContraFator= 0.25;   // Fator lote cesto CONTRA tendencia [v3.31: 0.20->0.25]
 input int    InpZoneCap            = 2;      // [v3.25] Max recompras por zona (0=deslig). Balas extras guardadas para oscilacoes maiores.
