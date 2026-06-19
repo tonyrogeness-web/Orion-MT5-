@@ -462,7 +462,7 @@ void AtualizarLucroHoje() {
          bool isOrionDeal = false;
          if(dealMagic >= InpMagicNumberBase && dealMagic <= InpMagicNumberBase + 999999) {
             isOrionDeal = true;
-         } else if(dealMagic == 0 && dt >= g_InicioHistorico) {
+         } else if(dealMagic == 0 && dt >= g_InicioHistorico && HistoryDealGetString(t, DEAL_SYMBOL) == _Symbol) {
             isOrionDeal = true;
          }
          
@@ -5116,7 +5116,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
             g_DD_Reached10        = false;
             g_DD_Reached20        = false;
             g_TrailingActive      = false;
-            g_PeakProfit          = -999.0;
+            g_PeakProfit          = 0.0;
          }
          AddLog(g_BotPaused?"Robo PAUSADO.":"Robo RETOMADO.");
       }
