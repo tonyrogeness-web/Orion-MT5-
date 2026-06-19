@@ -4424,11 +4424,12 @@ void EnviarDadosWeb() {
       string comment = PositionGetString(POSITION_COMMENT);
       int level = ObterNivelPosicao(comment, dir);
       
+      bool isSos = (dir == "BUY") ? g_BuySaidaZeroAtiva : g_SellSaidaZeroAtiva;
       if(cnt > 0) tradesJson += ",";
       tradesJson += "{\"ticket\":\"" + IntegerToString(tk) + "\",\"symbol\":\"" + _Symbol + "\",\"type\":\"" + dir + "\",\"volume\":" + DoubleToString(vol,2)
                  + ",\"entryPrice\":" + DoubleToString(ep,5) + ",\"currentPrice\":" + DoubleToString(curPrice,5) + ",\"currentProfit\":" + DoubleToString(prof,2)
                  + ",\"tp\":" + DoubleToString(tp,5) + ",\"sl\":" + DoubleToString(sl,5) + ",\"grade\":" + IntegerToString(level)
-                 + ",\"magicNumber\":" + IntegerToString((int)mag) + "}";
+                 + ",\"magicNumber\":" + IntegerToString((int)mag) + ",\"sosScheduled\":" + (isSos ? "true" : "false") + "}";
       cnt++;
    }
 
