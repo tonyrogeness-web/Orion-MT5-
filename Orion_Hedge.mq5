@@ -103,7 +103,7 @@ input int    InpNivelHedgeParcial  = 5;      // Alt 1: Ativar quando cesto opost
 input double InpFatorLucroHedge    = 0.50;   // Alt 1: Queimar ate 50% do lucro na ordem ruim
 
 input group "=== CICLO DE EQUITY AUTOMÁTICO ==="
-input bool   InpAtivarCicloEquity      = true;  // Ativar Ciclo de P. Líquido (Realizado)
+input bool   InpAtivarCicloEquity      = false;  // Ativar Ciclo de P. Líquido (Realizado)
 input double InpMetaCicloEquityPct     = 5.0;   // Meta de Lucro Líquido Real (%)
 input bool   InpAutoResetCiclo         = true;  // Reiniciar Automático (sem pausar EA)
 input int    InpCooldownCicloMinutos   = 5;     // Cooldown pós-fechamento (Minutos)
