@@ -238,10 +238,15 @@ datetime g_ConfirmSell     = 0;
 bool     g_BuySaidaZeroAtiva  = false;
 bool     g_SellSaidaZeroAtiva = false;
 
-// Controle de confirmação de cliques na grade
-int      g_GradeConfirmLvl     = -1;
-bool     g_GradeConfirmIsBuy   = false;
-datetime g_GradeConfirmTime    = 0;
+void SetBuySaidaZeroAtiva(bool val) {
+   g_BuySaidaZeroAtiva = val;
+   GlobalVariableSet("OrionHedge_SOS_BuyAtiva_" + _Symbol, val ? 1.0 : 0.0);
+}
+
+void SetSellSaidaZeroAtiva(bool val) {
+   g_SellSaidaZeroAtiva = val;
+   GlobalVariableSet("OrionHedge_SOS_SellAtiva_" + _Symbol, val ? 1.0 : 0.0);
+}
 
 // Historico
 int      g_DealsCountCache = -1;
@@ -1682,6 +1687,11 @@ int OnInit() {
 
    g_TaxaBRLAtual = ObterTaxaBRLDinamica();
    AtualizarLoteBase();
+   // Restaurar agendamentos S.O.S persistidos
+   if(GlobalVariableCheck("OrionHedge_SOS_BuyAtiva_" + _Symbol))
+      g_BuySaidaZeroAtiva = (GlobalVariableGet("OrionHedge_SOS_BuyAtiva_" + _Symbol) > 0.5);
+   if(GlobalVariableCheck("OrionHedge_SOS_SellAtiva_" + _Symbol))
+      g_SellSaidaZeroAtiva = (GlobalVariableGet("OrionHedge_SOS_SellAtiva_" + _Symbol) > 0.5);
    LimparPainel();  // [v3.25] Vassoura completa on init — remove fantasmas de sessoes anteriores
    EventSetTimer(1);
    AddLog("ORION v3.40 OK! Par: "+_Symbol+" | MagicBuy="+IntegerToString(g_MagicBuy));
@@ -2199,7 +2209,7 @@ void ProcessarAgendamentoSOS() {
    // Se cesto Buy tem agendamento ativo
    if(g_BuySaidaZeroAtiva) {
       if(g_BuyNivelAtual < 2) {
-         g_BuySaidaZeroAtiva = false; // Cancela se não houver recompras
+         SetBuySaidaZeroAtiva(false); // Cancela se não houver recompras
       } else {
          int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
          if(ObterDadosRecompraDirecao(true, level, ticket, loss, lucroOposto, magicOposto)) {
@@ -2208,19 +2218,22 @@ void ProcessarAgendamentoSOS() {
             if(lucroOposto >= absLoss + buffer) {
                AddLog("[S.O.S AUTOMÁTICO] Executando resgate agendado de COMPRA N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) com lucro de VENDA (+" + DoubleToString(lucroOposto, 2) + " USC).");
                
-               trade.PositionClose(ticket);
-               for(int i = PositionsTotal() - 1; i >= 0; i--) {
-                  ulong t = PositionGetTicket(i);
-                  if(t > 0 && PositionSelectByTicket(t)) {
-                     if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-                        trade.PositionClose(t);
+               if(trade.PositionClose(ticket)) {
+                  for(int i = PositionsTotal() - 1; i >= 0; i--) {
+                     ulong t = PositionGetTicket(i);
+                     if(t > 0 && PositionSelectByTicket(t)) {
+                        if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+                           trade.PositionClose(t);
+                        }
                      }
                   }
+                  g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
+                  SetBuySaidaZeroAtiva(false);
+                  DesenharPainel();
+                  ChartRedraw(0);
+               } else {
+                  AddLog("[S.O.S AUTOMÁTICO] Erro ao fechar posição de resgate COMPRA N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
                }
-               g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
-               g_BuySaidaZeroAtiva = false;
-               DesenharPainel();
-               ChartRedraw(0);
             }
          }
       }
@@ -2229,7 +2242,7 @@ void ProcessarAgendamentoSOS() {
    // Se cesto Sell tem agendamento ativo
    if(g_SellSaidaZeroAtiva) {
       if(g_SellNivelAtual < 2) {
-         g_SellSaidaZeroAtiva = false; // Cancela se não houver recompras
+         SetSellSaidaZeroAtiva(false); // Cancela se não houver recompras
       } else {
          int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
          if(ObterDadosRecompraDirecao(false, level, ticket, loss, lucroOposto, magicOposto)) {
@@ -2238,19 +2251,22 @@ void ProcessarAgendamentoSOS() {
             if(lucroOposto >= absLoss + buffer) {
                AddLog("[S.O.S AUTOMÁTICO] Executando resgate agendado de VENDA N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) com lucro de COMPRA (+" + DoubleToString(lucroOposto, 2) + " USC).");
                
-               trade.PositionClose(ticket);
-               for(int i = PositionsTotal() - 1; i >= 0; i--) {
-                  ulong t = PositionGetTicket(i);
-                  if(t > 0 && PositionSelectByTicket(t)) {
-                     if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-                        trade.PositionClose(t);
+               if(trade.PositionClose(ticket)) {
+                  for(int i = PositionsTotal() - 1; i >= 0; i--) {
+                     ulong t = PositionGetTicket(i);
+                     if(t > 0 && PositionSelectByTicket(t)) {
+                        if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+                           trade.PositionClose(t);
+                        }
                      }
                   }
+                  g_SellZoneOrigin = 0; g_SellEmTrailing = false;
+                  SetSellSaidaZeroAtiva(false);
+                  DesenharPainel();
+                  ChartRedraw(0);
+               } else {
+                  AddLog("[S.O.S AUTOMÁTICO] Erro ao fechar posição de resgate VENDA N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
                }
-               g_SellZoneOrigin = 0; g_SellEmTrailing = false;
-               g_SellSaidaZeroAtiva = false;
-               DesenharPainel();
-               ChartRedraw(0);
             }
          }
       }
@@ -4557,6 +4573,8 @@ void EnviarDadosWeb() {
    body += "\"trailingPeak\":" + DoubleToString(g_PeakProfit, 2) + ",";
    body += "\"ddReached10\":" + (g_DD_Reached10 ? "true" : "false") + ",";
    body += "\"ddReached20\":" + (g_DD_Reached20 ? "true" : "false") + ",";
+   body += "\"buySosScheduled\":" + (g_BuySaidaZeroAtiva ? "true" : "false") + ",";
+   body += "\"sellSosScheduled\":" + (g_SellSaidaZeroAtiva ? "true" : "false") + ",";
    
    double currentTargetPct = InpMetaCicloEquityPct;
    body += "\"equityCycleBase\":" + DoubleToString(g_EquityCycleBaseBalance, 2) + ",";
@@ -4645,6 +4663,8 @@ void OnTimer() {
    // Atualizar cestos para garantir dados frescos no timer (mesmo sem ticks)
    AtualizarCestoBuy();
    AtualizarCestoSell();
+   // Executar monitoramento S.O.S em baixa liquidez/sem ticks
+   ProcessarAgendamentoSOS();
 
    // Sincronizar pause global (somente ativação forçada via Pânico)
    if(GlobalVariableCheck("OrionHedge_Global_BotPaused")) {
@@ -5027,92 +5047,6 @@ bool ObterDadosUltimaRecompra(bool &isBuyRescue, int &level, ulong &ticket, doub
 }
 
 //===================================================================
-// SOS MANUAL: FECHAR RECOMPRA NO ZERO A ZERO
-//===================================================================
-void FecharRecompraNoZero(bool isBuyRescue, int level) {
-   int magicPerdedor = isBuyRescue ? g_MagicBuy : g_MagicSell;
-   int magicVencedor = isBuyRescue ? g_MagicSell : g_MagicBuy;
-   string targetComm = (isBuyRescue ? "OH_B" : "OH_S") + IntegerToString(level);
-   
-   // 1. Achar a ordem do nível selecionado e calcular o prejuízo
-   ulong rescueTicket = 0;
-   double rescueLoss = 0.0;
-   
-   for(int i = PositionsTotal() - 1; i >= 0; i--) {
-      ulong t = PositionGetTicket(i);
-      if(t > 0 && PositionSelectByTicket(t)) {
-         if(PositionGetInteger(POSITION_MAGIC) == magicPerdedor && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-            if(PositionGetString(POSITION_COMMENT) == targetComm) {
-               rescueTicket = t;
-               rescueLoss = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
-               break;
-            }
-         }
-      }
-   }
-   
-   if(rescueTicket == 0) {
-      AddLog("[S.O.S] Erro: Recompra N" + IntegerToString(level) + " nao foi encontrada para fechamento.");
-      return;
-   }
-   
-   // Se a posição já for positiva (sem prejuízo), fecha ela direto sem precisar abater lucro do outro cesto
-   if(rescueLoss >= 0) {
-      trade.PositionClose(rescueTicket);
-      AddLog("[S.O.S] Recompra N" + IntegerToString(level) + " ja estava positiva e foi fechada diretamente.");
-      return;
-   }
-   
-   double absLoss = MathAbs(rescueLoss);
-   
-   // 2. Calcular lucro do cesto vencedor oposto
-   double lucroVencedor = 0.0;
-   for(int i = PositionsTotal() - 1; i >= 0; i--) {
-      ulong t = PositionGetTicket(i);
-      if(t > 0 && PositionSelectByTicket(t)) {
-         if(PositionGetInteger(POSITION_MAGIC) == magicVencedor && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-            lucroVencedor += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
-         }
-      }
-   }
-   
-   // 3. Validar se o lucro cobre o prejuízo
-   if(lucroVencedor <= 0) {
-      AddLog("[S.O.S] Bloqueado: Nao ha lucro aberto no cesto oposto para abater esta recompra.");
-      return;
-   }
-   
-    double buffer = MathMax(1.00, absLoss * 0.10); // Margem de seguranca de 10% ou no minimo 1.00 USC (BUG #3)
-    if(lucroVencedor < absLoss + buffer) {
-      AddLog("[S.O.S] Bloqueado: Lucro do cesto oposto (" + DoubleToString(lucroVencedor, 2) + " USC) e insuficiente para abater a Recompra N" + IntegerToString(level) + " (" + DoubleToString(absLoss, 2) + " USC) com margem de seguranca (" + DoubleToString(buffer, 2) + " USC).");
-      return;
-   }
-   
-   // 4. Executar os fechamentos no mesmo tick (Net Zero Loss)
-   AddLog("[S.O.S] Executando abatimento no zero: Fechando Recompra N" + IntegerToString(level) + " (" + DoubleToString(rescueLoss, 2) + " USC) financiando com cesto oposto (" + DoubleToString(lucroVencedor, 2) + " USC).");
-   
-   // Fecha a recompra ruim
-   trade.PositionClose(rescueTicket);
-   
-   // Fecha o cesto vencedor para realizar o lucro compensador
-   for(int i = PositionsTotal() - 1; i >= 0; i--) {
-      ulong t = PositionGetTicket(i);
-      if(t > 0 && PositionSelectByTicket(t)) {
-         if(PositionGetInteger(POSITION_MAGIC) == magicVencedor && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-            trade.PositionClose(t);
-         }
-      }
-   }
-   
-   // Reset de variáveis de trailing e zonas para segurança
-   if(isBuyRescue) {
-      g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
-   } else {
-      g_SellZoneOrigin = 0; g_SellEmTrailing = false;
-   }
-}
-
-//===================================================================
 // AUXILIAR: OBTER DADOS DA RECOMPRA ATIVA POR DIREÇÃO
 //===================================================================
 bool ObterDadosRecompraDirecao(bool isBuyRescue, int &level, ulong &ticket, double &loss, double &lucroOposto, int &magicOposto) {
@@ -5198,7 +5132,7 @@ void ExecutarResgateCesto(bool isBuyRescue) {
       msg += "Deseja DESATIVAR o monitoramento e o fechamento automático no Zero a Zero?";
       int res = MessageBox(msg, "Desativar Agendamento S.O.S", MB_YESNO | MB_ICONQUESTION);
       if(res == IDYES) {
-         if(isBuyRescue) g_BuySaidaZeroAtiva = false; else g_SellSaidaZeroAtiva = false;
+         if(isBuyRescue) SetBuySaidaZeroAtiva(false); else SetSellSaidaZeroAtiva(false);
          AddLog("[S.O.S] Agendamento cancelado manualmente para " + dirPerdedora);
          DesenharPainel();
          ChartRedraw(0);
@@ -5220,7 +5154,7 @@ void ExecutarResgateCesto(bool isBuyRescue) {
       
       int res = MessageBox(msg, "Agendar Saída S.O.S no Zero a Zero?", MB_YESNO | MB_ICONQUESTION);
       if(res == IDYES) {
-         if(isBuyRescue) g_BuySaidaZeroAtiva = true; else g_SellSaidaZeroAtiva = true;
+         if(isBuyRescue) SetBuySaidaZeroAtiva(true); else SetSellSaidaZeroAtiva(true);
          AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
          DesenharPainel();
          ChartRedraw(0);
@@ -5242,7 +5176,7 @@ void ExecutarResgateCesto(bool isBuyRescue) {
       
       int res = MessageBox(msg, "Agendar Saída S.O.S no Zero a Zero?", MB_YESNO | MB_ICONQUESTION);
       if(res == IDYES) {
-         if(isBuyRescue) g_BuySaidaZeroAtiva = true; else g_SellSaidaZeroAtiva = true;
+         if(isBuyRescue) SetBuySaidaZeroAtiva(true); else SetSellSaidaZeroAtiva(true);
          AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
          DesenharPainel();
          ChartRedraw(0);
@@ -5266,19 +5200,22 @@ void ExecutarResgateCesto(bool isBuyRescue) {
    if(res == IDYES) {
       AddLog("[S.O.S] Executando fechamento imediato da Recompra " + dirPerdedora + " N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) abatendo no cesto oposto (" + DoubleToString(lucroOposto, 2) + " USC).");
       
-      trade.PositionClose(ticket);
-      for(int i = PositionsTotal() - 1; i >= 0; i--) {
-         ulong t = PositionGetTicket(i);
-         if(t > 0 && PositionSelectByTicket(t)) {
-            if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-               trade.PositionClose(t);
+      if(trade.PositionClose(ticket)) {
+         for(int i = PositionsTotal() - 1; i >= 0; i--) {
+            ulong t = PositionGetTicket(i);
+            if(t > 0 && PositionSelectByTicket(t)) {
+               if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+                  trade.PositionClose(t);
+               }
             }
          }
-      }
-      if(isBuyRescue) {
-         g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
+         if(isBuyRescue) {
+            g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
+         } else {
+            g_SellZoneOrigin = 0; g_SellEmTrailing = false;
+         }
       } else {
-         g_SellZoneOrigin = 0; g_SellEmTrailing = false;
+         AddLog("[S.O.S IMEDIATO] Erro ao fechar posição de resgate " + dirPerdedora + " N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
       }
       DesenharPainel();
       ChartRedraw(0);
@@ -5287,11 +5224,6 @@ void ExecutarResgateCesto(bool isBuyRescue) {
       string msgSched = "Deseja deixar a Saída S.O.S AGENDADA de forma automática para este cesto?";
       int resSched = MessageBox(msgSched, "Agendar Saída S.O.S?", MB_YESNO | MB_ICONQUESTION);
       if(resSched == IDYES) {
-         if(isBuyRescue) g_BuySaidaZeroAtiva = true; else g_SellSaidaZeroAtiva = true;
-         AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
-         DesenharPainel();
-         ChartRedraw(0);
-      }
    }
 }
 
