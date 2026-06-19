@@ -4436,6 +4436,9 @@ void EnviarDadosWeb() {
    body += "\"account\":\"" + IntegerToString(acc) + "\",";
    body += "\"balance\":" + DoubleToString(bal, 2) + ",";
    body += "\"equity\":" + DoubleToString(eq, 2) + ",";
+   body += "\"softStopLimit\":" + DoubleToString(g_SoftStopAtual, 2) + ",";
+   body += "\"loteBase\":" + DoubleToString(g_LoteBase, 3) + ",";
+   body += "\"takeProfitLimit\":" + DoubleToString(g_TakeProfitAtual, 2) + ",";
    // BUG #7: brlRate compensando o fator centavo (multiplicando por 100 se for conta padrão)
    double brlRateToSend = g_TaxaBRLAtual;
    string accCurr = AccountInfoString(ACCOUNT_CURRENCY);
@@ -4922,8 +4925,9 @@ void FecharRecompraNoZero(bool isBuyRescue, int level) {
       return;
    }
    
-   if(lucroVencedor < absLoss) {
-      AddLog("[S.O.S] Bloqueado: Lucro do cesto oposto (" + DoubleToString(lucroVencedor, 2) + " USC) e insuficiente para abater a Recompra N" + IntegerToString(level) + " (" + DoubleToString(absLoss, 2) + " USC).");
+    double buffer = MathMax(1.00, absLoss * 0.10); // Margem de seguranca de 10% ou no minimo 1.00 USC (BUG #3)
+    if(lucroVencedor < absLoss + buffer) {
+      AddLog("[S.O.S] Bloqueado: Lucro do cesto oposto (" + DoubleToString(lucroVencedor, 2) + " USC) e insuficiente para abater a Recompra N" + IntegerToString(level) + " (" + DoubleToString(absLoss, 2) + " USC) com margem de seguranca (" + DoubleToString(buffer, 2) + " USC).");
       return;
    }
    
@@ -4962,6 +4966,10 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          int offset = 11;
          int idx = (int)StringToInteger(StringSubstr(sp, offset));
          int lvl = idx + 1;
+         if(lvl == 1) {
+            AddLog("GRADE MANUAL: O nivel N1 nao pode ser fechado no zero a zero (BUG #4).");
+            return;
+         }
          
          // Verificar se esse nível está de fato aberto antes de prosseguir
          bool lvlAberto = false;
