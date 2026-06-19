@@ -3427,9 +3427,9 @@ void DesenharPainel() {
    // Grade inferior Buy — Compras sempre na paleta Verde/Amarela para nao confundir com Venda
    bool isBuyLimGrd = ((g_BuyLucro+g_BuySwap) < -g_SoftStopPorCesto);
    color buyGradeClr = isBuyLimGrd ? C'0,255,128' : (g_BuyTotal >= InpMaxOrdens-1 ? CLR_AMBER : CLR_TEAL);
-   PLabel("buy_grl",lx,cur+4,"GRADE:",CLR_TXT_DIM,8,true);
-   PGradeBar("buy_grade",lx+46,cur,thm_w-72,18,InpMaxOrdens,g_BuyTotal,buyGradeClr,C'14,24,18');
-   PLabelR("buy_grn",rx,cur+4,IntegerToString(g_BuyTotal)+"/"+IntegerToString(InpMaxOrdens),g_BuyTotal>0?CLR_BLUE:CLR_TXT_DIM,8,true); cur+=26;
+   PLabel("buy_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
+   PGradeBar("buy_grade",lx+46,cur,thm_w-72,10,InpMaxOrdens,g_BuyTotal,buyGradeClr,C'14,24,18');
+   PLabelR("buy_grn",rx,cur,IntegerToString(g_BuyTotal)+"/"+IntegerToString(InpMaxOrdens),g_BuyTotal>0?CLR_BLUE:CLR_TXT_DIM,8,true); cur+=20;
 
    //=======================================================  SECAO 4: CESTO VENDA
    PSect("sec_sell", px, cur, pw, "CESTA DE VENDA", CLR_RED);
@@ -3521,9 +3521,9 @@ void DesenharPainel() {
    // Grade inferior Sell — Vendas sempre na paleta Vermelha/Laranja
    bool isSelLimGrd = ((g_SellLucro+g_SellSwap) < -g_SoftStopPorCesto);
    color selGradeClr = isSelLimGrd ? CLR_RED : (g_SellTotal >= InpMaxOrdens-1 ? C'255,100,50' : C'180,60,60');
-   PLabel("sel_grl",lx,cur+4,"GRADE:",CLR_TXT_DIM,8,true);
-   PGradeBar("sel_grade",lx+46,cur,thm_w-72,18,InpMaxOrdens,g_SellTotal,selGradeClr,C'24,14,14');
-   PLabelR("sel_grn",rx,cur+4,IntegerToString(g_SellTotal)+"/"+IntegerToString(InpMaxOrdens),g_SellTotal>0?CLR_BLUE:CLR_TXT_DIM,8,true); cur+=26;
+   PLabel("sel_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
+   PGradeBar("sel_grade",lx+46,cur,thm_w-72,10,InpMaxOrdens,g_SellTotal,selGradeClr,C'24,14,14');
+   PLabelR("sel_grn",rx,cur,IntegerToString(g_SellTotal)+"/"+IntegerToString(InpMaxOrdens),g_SellTotal>0?CLR_BLUE:CLR_TXT_DIM,8,true); cur+=18;
 
    //=======================================================  SECAO 6: CONTROLES
    PSect("s_ctrl",px,cur,pw,"CONTROLES",CLR_TXT_DIM); cur+=16;
@@ -3531,6 +3531,9 @@ void DesenharPainel() {
    int bwfull=pw-(pad*2)+4;
    PButton("btn_pause",px+pad-2,cur,bwfull,24,g_BotPaused?"[>] RETOMAR":"[||] PAUSAR",
            g_BotPaused?CLR_TEAL_DIM:CLR_BG_SECTION,g_BotPaused?CLR_TEAL:CLR_TXT_PRIMARY); cur+=30;
+   
+   PButton("btn_sos_zero",px+pad-2,cur,bwfull,24,"[S.O.S] SAIDA NO ZERO",C'65,18,18',CLR_RED); cur+=30;
+   
    PButton("btn_l0",px+pad-2,cur,bw,20,"LINHAS: VISIVEIS",g_LinhasModo==0?CLR_TEAL_DIM:CLR_BG_CARD,g_LinhasModo==0?CLR_TEAL:CLR_TXT_DIM);
    PButton("btn_l1",px+pad+bw+2,cur,bw,20,"LINHAS: OCULTAS",g_LinhasModo==1?CLR_RED_DIM:CLR_BG_CARD,g_LinhasModo==1?CLR_RED:CLR_TXT_DIM); cur+=22;
    PButton("btn_analise",px+pad-2,cur,bwfull,20,g_ModoAnalise?"[ ANÁLISE ATIVA ]":"[ ANÁLISE DE MERCADO (OFF) ]",g_ModoAnalise?C'15,35,75':CLR_BG_CARD,g_ModoAnalise?CLR_BLUE:CLR_TXT_DIM); cur+=28;
@@ -4878,6 +4881,71 @@ void FecharLocal() {
 }
 
 //===================================================================
+// AUXILIAR: OBTER DADOS DA ULTIMA RECOMPRA ATIVA
+//===================================================================
+bool ObterDadosUltimaRecompra(bool &isBuyRescue, int &level, ulong &ticket, double &loss, double &lucroOposto, int &magicOposto) {
+   isBuyRescue = true;
+   level = 0;
+   ticket = 0;
+   loss = 0.0;
+   lucroOposto = 0.0;
+   magicOposto = 0;
+
+   int buyLvl = g_BuyNivelAtual;
+   int sellLvl = g_SellNivelAtual;
+
+   if(buyLvl <= 1 && sellLvl <= 1) return false;
+
+   if(buyLvl > sellLvl) {
+      isBuyRescue = true;
+      level = buyLvl;
+   } else if(sellLvl > buyLvl) {
+      isBuyRescue = false;
+      level = sellLvl;
+   } else {
+      double buyLoss = g_BuyLucro + g_BuySwap;
+      double sellLoss = g_SellLucro + g_SellSwap;
+      if(buyLoss < sellLoss) {
+         isBuyRescue = true;
+         level = buyLvl;
+      } else {
+         isBuyRescue = false;
+         level = sellLvl;
+      }
+   }
+
+   int magicPerdedor = isBuyRescue ? g_MagicBuy : g_MagicSell;
+   magicOposto = isBuyRescue ? g_MagicSell : g_MagicBuy;
+   string targetComm = (isBuyRescue ? "OH_B" : "OH_S") + IntegerToString(level);
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
+      ulong t = PositionGetTicket(i);
+      if(t > 0 && PositionSelectByTicket(t)) {
+         if(PositionGetInteger(POSITION_MAGIC) == magicPerdedor && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+            if(PositionGetString(POSITION_COMMENT) == targetComm) {
+               ticket = t;
+               loss = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+               break;
+            }
+         }
+      }
+   }
+
+   if(ticket == 0) return false;
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
+      ulong t = PositionGetTicket(i);
+      if(t > 0 && PositionSelectByTicket(t)) {
+         if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+            lucroOposto += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+         }
+      }
+   }
+
+   return true;
+}
+
+//===================================================================
 // SOS MANUAL: FECHAR RECOMPRA NO ZERO A ZERO
 //===================================================================
 void FecharRecompraNoZero(bool isBuyRescue, int level) {
@@ -4968,53 +5036,66 @@ void FecharRecompraNoZero(bool isBuyRescue, int level) {
 //===================================================================
 void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp) {
    if(id==CHARTEVENT_OBJECT_CLICK) {
-      // Cliques na grade de caixinhas para fechamento seguro no zero
-      if(StringFind(sp, "buy_grade_b") == 0 || StringFind(sp, "sel_grade_b") == 0) {
-         bool isBuyClick = (StringFind(sp, "buy_grade_b") == 0);
-         int offset = 11;
-         int idx = (int)StringToInteger(StringSubstr(sp, offset));
-         int lvl = idx + 1;
-         if(lvl == 1) {
-            AddLog("GRADE MANUAL: O nivel N1 nao pode ser fechado no zero a zero (BUG #4).");
+      // Botão S.O.S Saída no Zero a Zero para a última recompra
+      if(sp == PANEL_PREFIX + "btn_sos_zero") {
+         bool isBuyRescue;
+         int level;
+         ulong ticket;
+         double loss;
+         double lucroOposto;
+         int magicOposto;
+
+         if(!ObterDadosUltimaRecompra(isBuyRescue, level, ticket, loss, lucroOposto, magicOposto)) {
+            MessageBox("Nao ha nenhuma Recompra (nivel >= 2) aberta neste ativo para resgate.", "S.O.S Saida no Zero", MB_OK | MB_ICONINFORMATION);
             return;
          }
-         
-         // Verificar se esse nível está de fato aberto antes de prosseguir
-         bool lvlAberto = false;
-         string targetComm = (isBuyClick ? "OH_B" : "OH_S") + IntegerToString(lvl);
-         for(int i = PositionsTotal() - 1; i >= 0; i--) {
-            ulong t = PositionGetTicket(i);
-            if(t > 0 && PositionSelectByTicket(t)) {
-               long mag = PositionGetInteger(POSITION_MAGIC);
-               if(mag == (isBuyClick ? g_MagicBuy : g_MagicSell)) {
-                  if(PositionGetString(POSITION_COMMENT) == targetComm) {
-                     lvlAberto = true;
-                     break;
+
+         string dirPerdedora = isBuyRescue ? "COMPRA" : "VENDA";
+         string dirVencedora = isBuyRescue ? "VENDA" : "COMPRA";
+         double absLoss = MathAbs(loss);
+         double buffer = MathMax(1.00, absLoss * 0.10);
+
+         string msg = "=== SOLICITACAO DE RESGATE S.O.S ===\n\n";
+         msg += "Deseja fechar a ultima Recompra de " + dirPerdedora + " N" + IntegerToString(level) + "?\n";
+         msg += "• Ticket da Posicao: " + IntegerToString(ticket) + "\n";
+         msg += "• Perda da Posicao: " + DoubleToString(loss, 2) + " USC\n\n";
+         msg += "Esta perda sera abatida usando o lucro do cesto oposto de " + dirVencedora + ":\n";
+         msg += "• Lucro do Cesto Oposto: +" + DoubleToString(lucroOposto, 2) + " USC\n";
+         msg += "• Margem de Seguranca exigida: " + DoubleToString(buffer, 2) + " USC\n\n";
+
+         if(lucroOposto < absLoss + buffer) {
+            msg += "❌ BLOQUEADO: O lucro do cesto oposto e INSUFICIENTE. Falta " + DoubleToString((absLoss + buffer) - lucroOposto, 2) + " USC para realizar a operacao com seguranca.";
+            MessageBox(msg, "S.O.S Saida no Zero - Saldo Insuficiente", MB_OK | MB_ICONWARNING);
+         } else {
+            msg += "✅ APROVADO: O lucro cobre a perda com margem de seguranca!\n\nDeseja executar o fechamento no zero a zero agora?";
+            int res = MessageBox(msg, "Confirmar Fechamento S.O.S no Zero a Zero", MB_YESNO | MB_ICONQUESTION);
+            if(res == IDYES) {
+               AddLog("[S.O.S] Executando fechamento da Recompra " + dirPerdedora + " N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) abatendo no cesto oposto (" + DoubleToString(lucroOposto, 2) + " USC).");
+               
+               // Fecha a recompra
+               trade.PositionClose(ticket);
+               
+               // Fecha o cesto vencedor
+               for(int i = PositionsTotal() - 1; i >= 0; i--) {
+                  ulong t = PositionGetTicket(i);
+                  if(t > 0 && PositionSelectByTicket(t)) {
+                     if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+                        trade.PositionClose(t);
+                     }
                   }
                }
+               
+               // Reset de variaveis de trailing e zonas
+               if(isBuyRescue) {
+                  g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
+               } else {
+                  g_SellZoneOrigin = 0; g_SellEmTrailing = false;
+               }
+               
+               DesenharPainel();
+               ChartRedraw(0);
             }
          }
-         
-         if(!lvlAberto) {
-            AddLog("GRADE MANUAL: Nivel N" + IntegerToString(lvl) + " nao esta aberto.");
-            return;
-         }
-         
-         // Lógica de confirmação de 3 segundos
-         if(g_GradeConfirmLvl == lvl && g_GradeConfirmIsBuy == isBuyClick && TimeCurrent() - g_GradeConfirmTime <= 3) {
-            // Chamada da função de fechamento no zero
-            FecharRecompraNoZero(isBuyClick, lvl);
-            g_GradeConfirmLvl = -1;
-            g_GradeConfirmTime = 0;
-         } else {
-            g_GradeConfirmLvl = lvl;
-            g_GradeConfirmIsBuy = isBuyClick;
-            g_GradeConfirmTime = TimeCurrent();
-            AddLog("! CLIQUE SEGURO: Clique novamente em 3s na caixinha N" + IntegerToString(lvl) + " (" + (isBuyClick ? "COMPRA" : "VENDA") + ") para fechar no ZERO usando lucro oposto.");
-         }
-         
-         DesenharPainel();
-         ChartRedraw(0);
          return;
       }
       // Bloquear seletor de filtros se o Trailing de Patrimonio estiver ativo
