@@ -4444,7 +4444,7 @@ void EnviarDadosWeb() {
    }
    body += "\"brlRate\":" + DoubleToString(brlRateToSend, 4) + ",";
    body += "\"dailyProfit\":" + DoubleToString(g_HistLucroHoje, 2) + ",";
-   body += "\"floatingPl\":" + DoubleToString(pnl, 2) + ",";
+   body += "\"floatingPl\":" + DoubleToString(global_total, 2) + ",";
    body += "\"totalProfit\":" + DoubleToString(g_HistLucroGlobal, 2) + ",";
    body += "\"maxDrawdown\":" + DoubleToString(ddPct, 2) + ",";
    body += "\"status\":\"" + status + "\",";
