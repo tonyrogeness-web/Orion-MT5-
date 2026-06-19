@@ -103,7 +103,7 @@ input int    InpNivelHedgeParcial  = 5;      // Alt 1: Ativar quando cesto opost
 input double InpFatorLucroHedge    = 0.50;   // Alt 1: Queimar ate 50% do lucro na ordem ruim
 
 input group "=== CICLO DE EQUITY AUTOMÁTICO ==="
-input bool   InpAtivarCicloEquity      = false;  // Ativar Ciclo de P. Líquido (Realizado)
+input bool   InpAtivarCicloEquity      = true;  // Ativar Ciclo de P. Líquido (Realizado)
 input double InpMetaCicloEquityPct     = 5.0;   // Meta de Lucro Líquido Real (%)
 input bool   InpAutoResetCiclo         = true;  // Reiniciar Automático (sem pausar EA)
 input int    InpCooldownCicloMinutos   = 5;     // Cooldown pós-fechamento (Minutos)
@@ -3427,9 +3427,9 @@ void DesenharPainel() {
    // Grade inferior Buy — Compras sempre na paleta Verde/Amarela para nao confundir com Venda
    bool isBuyLimGrd = ((g_BuyLucro+g_BuySwap) < -g_SoftStopPorCesto);
    color buyGradeClr = isBuyLimGrd ? C'0,255,128' : (g_BuyTotal >= InpMaxOrdens-1 ? CLR_AMBER : CLR_TEAL);
-   PLabel("buy_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
-   PGradeBar("buy_grade",lx+46,cur,thm_w-72,10,InpMaxOrdens,g_BuyTotal,buyGradeClr,C'14,24,18');
-   PLabelR("buy_grn",rx,cur,IntegerToString(g_BuyTotal)+"/"+IntegerToString(InpMaxOrdens),g_BuyTotal>0?CLR_BLUE:CLR_TXT_DIM,8,true); cur+=20;
+   PLabel("buy_grl",lx,cur+4,"GRADE:",CLR_TXT_DIM,8,true);
+   PGradeBar("buy_grade",lx+46,cur,thm_w-72,18,InpMaxOrdens,g_BuyTotal,buyGradeClr,C'14,24,18');
+   PLabelR("buy_grn",rx,cur+4,IntegerToString(g_BuyTotal)+"/"+IntegerToString(InpMaxOrdens),g_BuyTotal>0?CLR_BLUE:CLR_TXT_DIM,8,true); cur+=26;
 
    //=======================================================  SECAO 4: CESTO VENDA
    PSect("sec_sell", px, cur, pw, "CESTA DE VENDA", CLR_RED);
@@ -3521,9 +3521,9 @@ void DesenharPainel() {
    // Grade inferior Sell — Vendas sempre na paleta Vermelha/Laranja
    bool isSelLimGrd = ((g_SellLucro+g_SellSwap) < -g_SoftStopPorCesto);
    color selGradeClr = isSelLimGrd ? CLR_RED : (g_SellTotal >= InpMaxOrdens-1 ? C'255,100,50' : C'180,60,60');
-   PLabel("sel_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
-   PGradeBar("sel_grade",lx+46,cur,thm_w-72,10,InpMaxOrdens,g_SellTotal,selGradeClr,C'24,14,14');
-   PLabelR("sel_grn",rx,cur,IntegerToString(g_SellTotal)+"/"+IntegerToString(InpMaxOrdens),g_SellTotal>0?CLR_BLUE:CLR_TXT_DIM,8,true); cur+=18;
+   PLabel("sel_grl",lx,cur+4,"GRADE:",CLR_TXT_DIM,8,true);
+   PGradeBar("sel_grade",lx+46,cur,thm_w-72,18,InpMaxOrdens,g_SellTotal,selGradeClr,C'24,14,14');
+   PLabelR("sel_grn",rx,cur+4,IntegerToString(g_SellTotal)+"/"+IntegerToString(InpMaxOrdens),g_SellTotal>0?CLR_BLUE:CLR_TXT_DIM,8,true); cur+=26;
 
    //=======================================================  SECAO 6: CONTROLES
    PSect("s_ctrl",px,cur,pw,"CONTROLES",CLR_TXT_DIM); cur+=16;
