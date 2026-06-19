@@ -2193,6 +2193,71 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
 }
 
 //===================================================================
+// MONITORAMENTO AUTOMÁTICO DE RESGATE AGENDADO (S.O.S)
+//===================================================================
+void ProcessarAgendamentoSOS() {
+   // Se cesto Buy tem agendamento ativo
+   if(g_BuySaidaZeroAtiva) {
+      if(g_BuyNivelAtual < 2) {
+         g_BuySaidaZeroAtiva = false; // Cancela se não houver recompras
+      } else {
+         int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
+         if(ObterDadosRecompraDirecao(true, level, ticket, loss, lucroOposto, magicOposto)) {
+            double absLoss = MathAbs(loss);
+            double buffer = MathMax(1.00, absLoss * 0.10);
+            if(lucroOposto >= absLoss + buffer) {
+               AddLog("[S.O.S AUTOMÁTICO] Executando resgate agendado de COMPRA N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) com lucro de VENDA (+" + DoubleToString(lucroOposto, 2) + " USC).");
+               
+               trade.PositionClose(ticket);
+               for(int i = PositionsTotal() - 1; i >= 0; i--) {
+                  ulong t = PositionGetTicket(i);
+                  if(t > 0 && PositionSelectByTicket(t)) {
+                     if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+                        trade.PositionClose(t);
+                     }
+                  }
+               }
+               g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
+               g_BuySaidaZeroAtiva = false;
+               DesenharPainel();
+               ChartRedraw(0);
+            }
+         }
+      }
+   }
+
+   // Se cesto Sell tem agendamento ativo
+   if(g_SellSaidaZeroAtiva) {
+      if(g_SellNivelAtual < 2) {
+         g_SellSaidaZeroAtiva = false; // Cancela se não houver recompras
+      } else {
+         int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
+         if(ObterDadosRecompraDirecao(false, level, ticket, loss, lucroOposto, magicOposto)) {
+            double absLoss = MathAbs(loss);
+            double buffer = MathMax(1.00, absLoss * 0.10);
+            if(lucroOposto >= absLoss + buffer) {
+               AddLog("[S.O.S AUTOMÁTICO] Executando resgate agendado de VENDA N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) com lucro de COMPRA (+" + DoubleToString(lucroOposto, 2) + " USC).");
+               
+               trade.PositionClose(ticket);
+               for(int i = PositionsTotal() - 1; i >= 0; i--) {
+                  ulong t = PositionGetTicket(i);
+                  if(t > 0 && PositionSelectByTicket(t)) {
+                     if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+                        trade.PositionClose(t);
+                     }
+                  }
+               }
+               g_SellZoneOrigin = 0; g_SellEmTrailing = false;
+               g_SellSaidaZeroAtiva = false;
+               DesenharPainel();
+               ChartRedraw(0);
+            }
+         }
+      }
+   }
+}
+
+//===================================================================
 // ONTICK — MOTOR HEDGE
 //===================================================================
 void OnTick() {
@@ -2233,6 +2298,9 @@ void OnTick() {
    // [BUG-C1 FIX] Atualizar cestos PRIMEIRO para ter dados frescos antes de calcular TP
    AtualizarCestoBuy();
    AtualizarCestoSell();
+   
+   // Monitoramento automático da saída zero a zero agendada
+   ProcessarAgendamentoSOS();
    
    GerenciarTPBuy();
    GerenciarTPSell();
@@ -2326,7 +2394,6 @@ void OnTick() {
          if(!g_NewsActive) {
             double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
             trade.SetExpertMagicNumber(g_MagicSell);
-            g_AguardandoSell=true; g_ConfirmSell=TimeCurrent();
             g_SellLoteInicial=loteSell;  // [FIX #11] Armazena lote inicial
             string dir_tag=!tendBuy?"[TENDENCIA]":"[CONTRA]";
             if(trade.Sell(loteSell,_Symbol,bid,0,0,"OH_S1"))
@@ -3428,7 +3495,10 @@ void DesenharPainel() {
    PLabel("buy_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
    PGradeBar("buy_grade",lx+46,cur,thm_w-118,10,InpMaxOrdens,g_BuyTotal,buyGradeClr,C'14,24,18');
    if(g_BuyNivelAtual >= 2) {
-      PButton("btn_buy_sos", lx + 46 + (thm_w - 118) + 6, cur - 2, 40, 14, "S.O.S", C'65,18,18', CLR_RED);
+      string buySosTxt = g_BuySaidaZeroAtiva ? "AGD" : "S.O.S";
+      color buySosBg = g_BuySaidaZeroAtiva ? CLR_AMBER : C'65,18,18';
+      color buySosFg = g_BuySaidaZeroAtiva ? clrBlack : CLR_RED;
+      PButton("btn_buy_sos", lx + 46 + (thm_w - 118) + 6, cur - 2, 40, 14, buySosTxt, buySosBg, buySosFg);
    } else {
       ObjectDelete(0, PANEL_PREFIX + "btn_buy_sos");
    }
@@ -3527,7 +3597,10 @@ void DesenharPainel() {
    PLabel("sel_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
    PGradeBar("sel_grade",lx+46,cur,thm_w-118,10,InpMaxOrdens,g_SellTotal,selGradeClr,C'24,14,14');
    if(g_SellNivelAtual >= 2) {
-      PButton("btn_sel_sos", lx + 46 + (thm_w - 118) + 6, cur - 2, 40, 14, "S.O.S", C'65,18,18', CLR_RED);
+      string selSosTxt = g_SellSaidaZeroAtiva ? "AGD" : "S.O.S";
+      color selSosBg = g_SellSaidaZeroAtiva ? CLR_AMBER : C'65,18,18';
+      color selSosFg = g_SellSaidaZeroAtiva ? clrBlack : CLR_RED;
+      PButton("btn_sel_sos", lx + 46 + (thm_w - 118) + 6, cur - 2, 40, 14, selSosTxt, selSosBg, selSosFg);
    } else {
       ObjectDelete(0, PANEL_PREFIX + "btn_sel_sos");
    }
@@ -5116,53 +5189,84 @@ void ExecutarResgateCesto(bool isBuyRescue) {
 
    string dirPerdedora = isBuyRescue ? "COMPRA" : "VENDA";
    string dirVencedora = isBuyRescue ? "VENDA" : "COMPRA";
+   bool isScheduled = isBuyRescue ? g_BuySaidaZeroAtiva : g_SellSaidaZeroAtiva;
+
+   // Caso 0: Já está agendado. Deseja cancelar?
+   if(isScheduled) {
+      string msg = "=== CANCELAR AGENDAMENTO S.O.S (" + dirPerdedora + " N" + IntegerToString(level) + ") ===\n\n";
+      msg += "O agendamento S.O.S já está ATIVO e monitorando este cesto em tempo real.\n\n";
+      msg += "Deseja DESATIVAR o monitoramento e o fechamento automático no Zero a Zero?";
+      int res = MessageBox(msg, "Desativar Agendamento S.O.S", MB_YESNO | MB_ICONQUESTION);
+      if(res == IDYES) {
+         if(isBuyRescue) g_BuySaidaZeroAtiva = false; else g_SellSaidaZeroAtiva = false;
+         AddLog("[S.O.S] Agendamento cancelado manualmente para " + dirPerdedora);
+         DesenharPainel();
+         ChartRedraw(0);
+      }
+      return;
+   }
+
    double absLoss = MathAbs(loss);
    double buffer = MathMax(1.00, absLoss * 0.10);
 
-   // Caso 1: Cesto oposto está em prejuízo
+   // Caso 1: Cesto oposto está em prejuízo -> Não dá pra fechar agora. Oferece agendamento.
    if(lucroOposto <= 0) {
       string msg = "=== RESGATAR RECOMPRA " + dirPerdedora + " N" + IntegerToString(level) + " ===\n\n";
-      msg += "❌ OPERAÇÃO BLOQUEADA (Cesto Oposto sem Lucro):\n\n";
-      msg += "• Posição a fechar: " + dirPerdedora + " N" + IntegerToString(level) + " (Prejuízo: " + DoubleToString(loss, 2) + " USC)\n";
+      msg += "⚠️ OPERAÇÃO IMEDIATA INDISPONÍVEL (Cesto Oposto sem Lucro):\n";
+      msg += "• Prejuízo da posição: " + DoubleToString(loss, 2) + " USC\n";
       msg += "• Cesto oposto (" + dirVencedora + "): Em PREJUÍZO (" + DoubleToString(lucroOposto, 2) + " USC)\n\n";
-      msg += "Para realizar o resgate sem perda de saldo, o cesto oposto de " + dirVencedora + " precisa estar em LUCRO aberto.";
-      MessageBox(msg, "S.O.S Saída no Zero - Cesto Oposto em Prejuízo", MB_OK | MB_ICONWARNING);
+      msg += "Deseja ATIVAR O AGENDAMENTO (monitoramento automático)?\n\n";
+      msg += "O robô monitorará em segundo plano e executará a Saída no Zero a Zero automaticamente assim que o cesto de " + dirVencedora + " atingir o lucro compensatório exigido.";
+      
+      int res = MessageBox(msg, "Agendar Saída S.O.S no Zero a Zero?", MB_YESNO | MB_ICONQUESTION);
+      if(res == IDYES) {
+         if(isBuyRescue) g_BuySaidaZeroAtiva = true; else g_SellSaidaZeroAtiva = true;
+         AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
+         DesenharPainel();
+         ChartRedraw(0);
+      }
       return;
    }
 
-   // Caso 2: Cesto oposto tem lucro, mas é insuficiente
+   // Caso 2: Cesto oposto tem lucro, mas é insuficiente -> Oferece agendamento.
    if(lucroOposto < absLoss + buffer) {
       double falta = (absLoss + buffer) - lucroOposto;
       string msg = "=== RESGATAR RECOMPRA " + dirPerdedora + " N" + IntegerToString(level) + " ===\n\n";
-      msg += "❌ OPERAÇÃO BLOQUEADA (Lucro Insuficiente):\n\n";
-      msg += "• Perda a compensar: " + DoubleToString(loss, 2) + " USC (Ticket " + IntegerToString(ticket) + ")\n";
+      msg += "⚠️ OPERAÇÃO IMEDIATA INDISPONÍVEL (Lucro Insuficiente):\n";
+      msg += "• Perda a compensar: " + DoubleToString(loss, 2) + " USC\n";
       msg += "• Lucro disponível (" + dirVencedora + "): +" + DoubleToString(lucroOposto, 2) + " USC\n";
-      msg += "• Margem de segurança exigida: " + DoubleToString(buffer, 2) + " USC\n\n";
-      msg += "Falta +" + DoubleToString(falta, 2) + " USC de lucro no cesto oposto para realizar o resgate com segurança.";
-      MessageBox(msg, "S.O.S Saída no Zero - Lucro Insuficiente", MB_OK | MB_ICONWARNING);
+      msg += "• Margem de segurança: " + DoubleToString(buffer, 2) + " USC\n";
+      msg += "• Falta para resgate seguro: +" + DoubleToString(falta, 2) + " USC\n\n";
+      msg += "Deseja ATIVAR O AGENDAMENTO (monitoramento automático)?\n\n";
+      msg += "O robô monitorará em segundo plano e executará o resgate automaticamente assim que o cesto oposto atingir o lucro necessário.";
+      
+      int res = MessageBox(msg, "Agendar Saída S.O.S no Zero a Zero?", MB_YESNO | MB_ICONQUESTION);
+      if(res == IDYES) {
+         if(isBuyRescue) g_BuySaidaZeroAtiva = true; else g_SellSaidaZeroAtiva = true;
+         AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
+         DesenharPainel();
+         ChartRedraw(0);
+      }
       return;
    }
 
-   // Caso 3: Aprovado para fechamento (Sim/Não)
+   // Caso 3: Aprovado para fechamento imediato (Sim/Não) -> Dá opção de fechar na hora ou agendar.
    double sobra = lucroOposto - (absLoss + buffer);
    string msg = "=== CONFIRMAR RESGATE S.O.S (" + dirPerdedora + " N" + IntegerToString(level) + ") ===\n\n";
-   msg += "Esta operação fechará a última recompra IMEDIATAMENTE no \"Zero a Zero\" (sem perda de saldo), utilizando o lucro do cesto oposto.\n\n";
+   msg += "Esta operação fechará a última recompra IMEDIATAMENTE no \"Zero a Zero\", utilizando o lucro do cesto oposto.\n\n";
    msg += "VALORES PARA COMPENSAÇÃO:\n";
    msg += "• Posição a fechar: " + dirPerdedora + " N" + IntegerToString(level) + " (Prejuízo: " + DoubleToString(loss, 2) + " USC)\n";
    msg += "• Lucro a ser consumido (" + dirVencedora + "): +" + DoubleToString(lucroOposto, 2) + " USC\n";
    msg += "• Margem de segurança: " + DoubleToString(buffer, 2) + " USC\n\n";
-   msg += "✅ OPERAÇÃO APROVADA!\n";
-   msg += "Após o fechamento, sobrará aproximadamente +" + DoubleToString(sobra, 2) + " USC de lucro no cesto oposto.\n\n";
-   msg += "Deseja executar o fechamento no zero a zero agora?";
+   msg += "✅ OPERAÇÃO APROVADA PARA FECHAMENTO IMEDIATO!\n";
+   msg += "Deseja executar o fechamento imediato agora?\n\n";
+   msg += "(Se clicar em NÃO, você poderá escolher agendar para depois).";
 
-   int res = MessageBox(msg, "Confirmar Fechamento S.O.S no Zero a Zero", MB_YESNO | MB_ICONQUESTION);
+   int res = MessageBox(msg, "Confirmar Fechamento S.O.S Imediato", MB_YESNO | MB_ICONQUESTION);
    if(res == IDYES) {
-      AddLog("[S.O.S] Executando fechamento da Recompra " + dirPerdedora + " N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) abatendo no cesto oposto (" + DoubleToString(lucroOposto, 2) + " USC).");
+      AddLog("[S.O.S] Executando fechamento imediato da Recompra " + dirPerdedora + " N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) abatendo no cesto oposto (" + DoubleToString(lucroOposto, 2) + " USC).");
       
-      // Fecha a recompra
       trade.PositionClose(ticket);
-      
-      // Fecha o cesto vencedor
       for(int i = PositionsTotal() - 1; i >= 0; i--) {
          ulong t = PositionGetTicket(i);
          if(t > 0 && PositionSelectByTicket(t)) {
@@ -5171,16 +5275,23 @@ void ExecutarResgateCesto(bool isBuyRescue) {
             }
          }
       }
-      
-      // Reset de variaveis de trailing e zonas
       if(isBuyRescue) {
          g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
       } else {
          g_SellZoneOrigin = 0; g_SellEmTrailing = false;
       }
-      
       DesenharPainel();
       ChartRedraw(0);
+   } else {
+      // Pergunta se quer agendar já que não quis fechar imediatamente
+      string msgSched = "Deseja deixar a Saída S.O.S AGENDADA de forma automática para este cesto?";
+      int resSched = MessageBox(msgSched, "Agendar Saída S.O.S?", MB_YESNO | MB_ICONQUESTION);
+      if(resSched == IDYES) {
+         if(isBuyRescue) g_BuySaidaZeroAtiva = true; else g_SellSaidaZeroAtiva = true;
+         AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
+         DesenharPainel();
+         ChartRedraw(0);
+      }
    }
 }
 
