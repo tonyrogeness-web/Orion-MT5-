@@ -3065,14 +3065,22 @@ void DesenharPainel() {
     cur += 16;
     
     // 3. P&L ABERTO
+    double usagePct = (balance > 0) ? MathAbs(MathMin(0.0, global_total)) / balance : 0.0;
+    string sPlLabel = "P&L ABERTO";
+    if(global_total < 0) sPlLabel += " (" + DoubleToString(usagePct * 100.0, 2) + "%)";
+    
     string sStatusPl = (global_total >= 0) ? "↑ flutuante" : "↓ flutuante";
     color clrPl = (global_total >= 0) ? C'0,200,83' : C'255,82,82';
     
-    PLabel("lbl_pl_l", lx, cur+2, "P&L ABERTO", CLR_TXT_DIM, 8);
+    PLabel("lbl_pl_l", lx, cur+2, sPlLabel, CLR_TXT_DIM, 8);
     PLabelR("lbl_pl_brl", lx + 160, cur+2, FormatBRL(global_total * fatBRL), CLR_TXT_DIM, 8);
     PLabelR("lbl_pl_usc", rx - 55, cur+1, FormatUSC(global_total, true) + " USC", clrPl, 10, true);
     PLabelR("lbl_pl_status", rx - 2, cur+2, sStatusPl, C'120,130,145', 8);
-    cur += 20;
+    cur += 16;
+    
+    color usageClr = (usagePct >= 0.20) ? C'255,82,82' : (usagePct >= 0.10 ? CLR_AMBER : C'0,200,83');
+    PBar("pl_usage_bar", lx, cur, thm_w, 4, usagePct, C'30,38,50', usageClr);
+    cur += 14;
     
     // Separador 2
     PRect("sep_pl", lx, cur, thm_w, 1, CLR_LINE_SOFT, -1, 204); cur += 10;
