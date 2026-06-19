@@ -138,6 +138,13 @@ input bool              InpBreakEvenDuringNews   = true;                    // A
 input bool              InpFilterByActivePairs   = true;                    // Filtrar apenas moedas operadas?
 input double            InpNewsAtrMultiplier     = 1.4;                     // Multiplicador ATR de Estabilizacao
 
+input group "=== FILTRO TENDENCIA FORTE + NOTICIA (RECOMPRAS) ==="
+input bool             InpBloquearRecompraNoticia = true;       // Bloquear novas recompras com noticia ativa
+input bool             InpFiltroTendenciaForte    = true;       // Ativar filtro de tendencia forte (ADX)
+input ENUM_TIMEFRAMES  InpTendenciaTF             = PERIOD_H1;  // Timeframe para medir forca da tendencia
+input int              InpADX_Periodo             = 14;         // Periodo do ADX
+input double           InpADX_TrendThreshold      = 30.0;       // ADX acima disso = tendencia forte confirmada
+
 input group "=== INTEGRACAO WEB ORION HEDGE ==="
 input bool   InpWebAtiva            = true;      // Ativar envio de dados para o Dashboard Web
 input string InpWebUrl              = "https://orion-theta-three.vercel.app/api/mt5/update"; // URL do servidor
@@ -233,6 +240,12 @@ double   g_SellZoneOrigin  = 0;   // [v3.25] Preco de abertura N1 do cesto Sell 
 datetime g_SellLastBarTime = 0;   // [v3.25+] Controle de 1 recompra por candle
 bool     g_AguardandoSell  = false;
 datetime g_ConfirmSell     = 0;
+
+// === FILTRO TENDENCIA FORTE + NOTICIA (ADX/NEWS) ===
+int      handleADXTrend  = INVALID_HANDLE;
+double   g_ADX_Trend     = 0;
+double   g_DIPlus_Trend  = 0;
+double   g_DIMinus_Trend = 0;
 
 // === SAÍDA ZERO A ZERO (GRADE) ===
 bool     g_BuySaidaZeroAtiva  = false;
@@ -1499,6 +1512,24 @@ bool FiltroAntiFacaConfirmado(bool isBuy) {
    }
 }
 
+//===================================================================
+// FILTRO DE TENDÊNCIA E NOTÍCIA PARA NOVAS RECOMPRAS
+//===================================================================
+bool BloquearNovaRecompra(bool isBuy) {
+   if(InpBloquearRecompraNoticia && g_NewsActive) {
+      return true;
+   }
+
+   if(InpFiltroTendenciaForte && g_ADX_Trend >= InpADX_TrendThreshold) {
+      bool tendenciaDeAlta  = (g_DIPlus_Trend  > g_DIMinus_Trend);
+      bool tendenciaDeBaixa = (g_DIMinus_Trend > g_DIPlus_Trend);
+      if(isBuy  && tendenciaDeBaixa) return true;
+      if(!isBuy && tendenciaDeAlta)  return true;
+   }
+
+   return false;
+}
+
 void ExecutarGradeBuy() {
    if(g_ATR_Value<=0||!TerminalInfoInteger(TERMINAL_CONNECTED)) return;
    trade.SetExpertMagicNumber(g_MagicBuy);
@@ -1512,7 +1543,7 @@ void ExecutarGradeBuy() {
    double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
    int nivel=g_BuyNivelAtual+1;
    datetime currentBar = iTime(_Symbol, InpBaseTF, 0);
-   if(InpOneTradePerBar && g_BuyLastBarTime == currentBar) return;
+         if(InpOneTradePerBar && g_BuyLastBarTime == currentBar) return;
    
    double supFR = g_BuyProxFR;
 
@@ -1523,6 +1554,16 @@ void ExecutarGradeBuy() {
 
    // [v3.38] Gatilho Anti-Faca: aguarda fechamento de candle na direção do cesto
    if(!FiltroAntiFacaConfirmado(true)) return;
+
+   // [FILTRO NOTICIA/TENDENCIA]
+   if(BloquearNovaRecompra(true)) {
+      static datetime lastLogBuy = 0;
+      if(TimeCurrent() - lastLogBuy > 60) {
+         AddLog("[TENDÊNCIA/NOTÍCIA] Recompra de COMPRA bloqueada: Filtro ativo.");
+         lastLogBuy = TimeCurrent();
+      }
+      return;
+   }
 
    if((int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD)>InpMaxSpread) return;
 
@@ -1567,6 +1608,16 @@ void ExecutarGradeSell() {
 
    // [v3.38] Gatilho Anti-Faca: aguarda fechamento de candle na direção do cesto
    if(!FiltroAntiFacaConfirmado(false)) return;
+
+   // [FILTRO NOTICIA/TENDENCIA]
+   if(BloquearNovaRecompra(false)) {
+      static datetime lastLogSell = 0;
+      if(TimeCurrent() - lastLogSell > 60) {
+         AddLog("[TENDÊNCIA/NOTÍCIA] Recompra de VENDA bloqueada: Filtro ativo.");
+         lastLogSell = TimeCurrent();
+      }
+      return;
+   }
 
    if((int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD)>InpMaxSpread) return;
 
@@ -1613,6 +1664,9 @@ void AtualizarSensores() {
    double buf[]; ArraySetAsSeries(buf,true);
    if(CopyBuffer(handleATR,0,0,1,buf)>0) g_ATR_Value=buf[0];
    if(CopyBuffer(handleEMA,0,0,1,buf)>0) g_EMA_Value=buf[0];
+   if(CopyBuffer(handleADXTrend,0,0,1,buf)>0) g_ADX_Trend=buf[0];
+   if(CopyBuffer(handleADXTrend,1,0,1,buf)>0) g_DIPlus_Trend=buf[0];
+   if(CopyBuffer(handleADXTrend,2,0,1,buf)>0) g_DIMinus_Trend=buf[0];
    datetime bar=iTime(_Symbol,InpBaseTF,0);
    if(bar==g_SensorBarTime && g_SensorBarTime>0) return;
    
@@ -1679,7 +1733,8 @@ int OnInit() {
    handleATR=iATR(_Symbol,InpBaseTF,InpATRPeriod);
    handleATR_Long=iATR(_Symbol,InpBaseTF,100);
    handleEMA=iMA(_Symbol,InpTrendTF,InpEmaTrend,0,MODE_EMA,PRICE_CLOSE);
-   if(handleATR==INVALID_HANDLE||handleATR_Long==INVALID_HANDLE||handleEMA==INVALID_HANDLE) {
+   handleADXTrend=iADX(_Symbol,InpTendenciaTF,InpADX_Periodo);
+   if(handleATR==INVALID_HANDLE||handleATR_Long==INVALID_HANDLE||handleEMA==INVALID_HANDLE||handleADXTrend==INVALID_HANDLE) {
       Print("Erro indicadores."); return INIT_FAILED;
    }
 
@@ -2168,6 +2223,7 @@ void OnDeinit(const int reason) {
    if(handleATR!=INVALID_HANDLE) IndicatorRelease(handleATR);
    if(handleATR_Long!=INVALID_HANDLE) IndicatorRelease(handleATR_Long);
    if(handleEMA!=INVALID_HANDLE) IndicatorRelease(handleEMA);
+   if(handleADXTrend!=INVALID_HANDLE) IndicatorRelease(handleADXTrend);
    // Libera handles do Modo Analise
    if(g_AnaHandleADX    !=INVALID_HANDLE) IndicatorRelease(g_AnaHandleADX);
    if(g_AnaHandleRSI    !=INVALID_HANDLE) IndicatorRelease(g_AnaHandleRSI);
@@ -5224,6 +5280,11 @@ void ExecutarResgateCesto(bool isBuyRescue) {
       string msgSched = "Deseja deixar a Saída S.O.S AGENDADA de forma automática para este cesto?";
       int resSched = MessageBox(msgSched, "Agendar Saída S.O.S?", MB_YESNO | MB_ICONQUESTION);
       if(resSched == IDYES) {
+         if(isBuyRescue) SetBuySaidaZeroAtiva(true); else SetSellSaidaZeroAtiva(true);
+         AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
+         DesenharPainel();
+         ChartRedraw(0);
+      }
    }
 }
 
