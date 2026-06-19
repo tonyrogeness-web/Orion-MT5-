@@ -5110,7 +5110,7 @@ void ExecutarResgateCesto(bool isBuyRescue) {
    int magicOposto;
 
    if(!ObterDadosRecompraDirecao(isBuyRescue, level, ticket, loss, lucroOposto, magicOposto)) {
-      MessageBox("Nao ha nenhuma Recompra (nivel >= 2) aberta neste cesto para resgate.", "S.O.S Saida no Zero", MB_OK | MB_ICONINFORMATION);
+      MessageBox("Não há nenhuma Recompra (nível >= 2) aberta neste cesto para resgate.", "S.O.S Saída no Zero", MB_OK | MB_ICONINFORMATION);
       return;
    }
 
@@ -5119,46 +5119,68 @@ void ExecutarResgateCesto(bool isBuyRescue) {
    double absLoss = MathAbs(loss);
    double buffer = MathMax(1.00, absLoss * 0.10);
 
-   string msg = "=== SOLICITACAO DE RESGATE S.O.S (" + dirPerdedora + ") ===\n\n";
-   msg += "Deseja fechar a ultima Recompra de " + dirPerdedora + " N" + IntegerToString(level) + "?\n";
-   msg += "• Ticket da Posicao: " + IntegerToString(ticket) + "\n";
-   msg += "• Perda da Posicao: " + DoubleToString(loss, 2) + " USC\n\n";
-   msg += "Esta perda sera abatida usando o lucro do cesto oposto de " + dirVencedora + ":\n";
-   msg += "• Lucro do Cesto Oposto: +" + DoubleToString(lucroOposto, 2) + " USC\n";
-   msg += "• Margem de Seguranca exigida: " + DoubleToString(buffer, 2) + " USC\n\n";
+   // Caso 1: Cesto oposto está em prejuízo
+   if(lucroOposto <= 0) {
+      string msg = "=== RESGATAR RECOMPRA " + dirPerdedora + " N" + IntegerToString(level) + " ===\n\n";
+      msg += "❌ OPERAÇÃO BLOQUEADA (Cesto Oposto sem Lucro):\n\n";
+      msg += "• Posição a fechar: " + dirPerdedora + " N" + IntegerToString(level) + " (Prejuízo: " + DoubleToString(loss, 2) + " USC)\n";
+      msg += "• Cesto oposto (" + dirVencedora + "): Em PREJUÍZO (" + DoubleToString(lucroOposto, 2) + " USC)\n\n";
+      msg += "Para realizar o resgate sem perda de saldo, o cesto oposto de " + dirVencedora + " precisa estar em LUCRO aberto.";
+      MessageBox(msg, "S.O.S Saída no Zero - Cesto Oposto em Prejuízo", MB_OK | MB_ICONWARNING);
+      return;
+   }
 
+   // Caso 2: Cesto oposto tem lucro, mas é insuficiente
    if(lucroOposto < absLoss + buffer) {
-      msg += "❌ BLOQUEADO: O lucro do cesto oposto e INSUFICIENTE. Falta " + DoubleToString((absLoss + buffer) - lucroOposto, 2) + " USC para realizar a operacao com seguranca.";
-      MessageBox(msg, "S.O.S Saida no Zero - Saldo Insuficiente", MB_OK | MB_ICONWARNING);
-   } else {
-      msg += "✅ APROVADO: O lucro cobre a perda com margem de seguranca!\n\nDeseja executar o fechamento no zero a zero agora?";
-      int res = MessageBox(msg, "Confirmar Fechamento S.O.S no Zero a Zero", MB_YESNO | MB_ICONQUESTION);
-      if(res == IDYES) {
-         AddLog("[S.O.S] Executando fechamento da Recompra " + dirPerdedora + " N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) abatendo no cesto oposto (" + DoubleToString(lucroOposto, 2) + " USC).");
-         
-         // Fecha a recompra
-         trade.PositionClose(ticket);
-         
-         // Fecha o cesto vencedor
-         for(int i = PositionsTotal() - 1; i >= 0; i--) {
-            ulong t = PositionGetTicket(i);
-            if(t > 0 && PositionSelectByTicket(t)) {
-               if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-                  trade.PositionClose(t);
-               }
+      double falta = (absLoss + buffer) - lucroOposto;
+      string msg = "=== RESGATAR RECOMPRA " + dirPerdedora + " N" + IntegerToString(level) + " ===\n\n";
+      msg += "❌ OPERAÇÃO BLOQUEADA (Lucro Insuficiente):\n\n";
+      msg += "• Perda a compensar: " + DoubleToString(loss, 2) + " USC (Ticket " + IntegerToString(ticket) + ")\n";
+      msg += "• Lucro disponível (" + dirVencedora + "): +" + DoubleToString(lucroOposto, 2) + " USC\n";
+      msg += "• Margem de segurança exigida: " + DoubleToString(buffer, 2) + " USC\n\n";
+      msg += "Falta +" + DoubleToString(falta, 2) + " USC de lucro no cesto oposto para realizar o resgate com segurança.";
+      MessageBox(msg, "S.O.S Saída no Zero - Lucro Insuficiente", MB_OK | MB_ICONWARNING);
+      return;
+   }
+
+   // Caso 3: Aprovado para fechamento (Sim/Não)
+   double sobra = lucroOposto - (absLoss + buffer);
+   string msg = "=== CONFIRMAR RESGATE S.O.S (" + dirPerdedora + " N" + IntegerToString(level) + ") ===\n\n";
+   msg += "Esta operação fechará a última recompra IMEDIATAMENTE no \"Zero a Zero\" (sem perda de saldo), utilizando o lucro do cesto oposto.\n\n";
+   msg += "VALORES PARA COMPENSAÇÃO:\n";
+   msg += "• Posição a fechar: " + dirPerdedora + " N" + IntegerToString(level) + " (Prejuízo: " + DoubleToString(loss, 2) + " USC)\n";
+   msg += "• Lucro a ser consumido (" + dirVencedora + "): +" + DoubleToString(lucroOposto, 2) + " USC\n";
+   msg += "• Margem de segurança: " + DoubleToString(buffer, 2) + " USC\n\n";
+   msg += "✅ OPERAÇÃO APROVADA!\n";
+   msg += "Após o fechamento, sobrará aproximadamente +" + DoubleToString(sobra, 2) + " USC de lucro no cesto oposto.\n\n";
+   msg += "Deseja executar o fechamento no zero a zero agora?";
+
+   int res = MessageBox(msg, "Confirmar Fechamento S.O.S no Zero a Zero", MB_YESNO | MB_ICONQUESTION);
+   if(res == IDYES) {
+      AddLog("[S.O.S] Executando fechamento da Recompra " + dirPerdedora + " N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) abatendo no cesto oposto (" + DoubleToString(lucroOposto, 2) + " USC).");
+      
+      // Fecha a recompra
+      trade.PositionClose(ticket);
+      
+      // Fecha o cesto vencedor
+      for(int i = PositionsTotal() - 1; i >= 0; i--) {
+         ulong t = PositionGetTicket(i);
+         if(t > 0 && PositionSelectByTicket(t)) {
+            if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+               trade.PositionClose(t);
             }
          }
-         
-         // Reset de variaveis de trailing e zonas
-         if(isBuyRescue) {
-            g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
-         } else {
-            g_SellZoneOrigin = 0; g_SellEmTrailing = false;
-         }
-         
-         DesenharPainel();
-         ChartRedraw(0);
       }
+      
+      // Reset de variaveis de trailing e zonas
+      if(isBuyRescue) {
+         g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
+      } else {
+         g_SellZoneOrigin = 0; g_SellEmTrailing = false;
+      }
+      
+      DesenharPainel();
+      ChartRedraw(0);
    }
 }
 
