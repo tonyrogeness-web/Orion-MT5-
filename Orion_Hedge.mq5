@@ -2699,7 +2699,7 @@ void LimparPainel() {
 void LimparPainelSOS(string pfx) {
    for(int i=ObjectsTotal(0,0,-1)-1;i>=0;i--) {
       string nm=ObjectName(0,i,0,-1);
-      if(StringFind(nm,PANEL_PREFIX+pfx)==0) ObjectDelete(0,nm);
+      if(StringFind(nm,PANEL_PREFIX+pfx)==0 || StringFind(nm,PANEL_PREFIX+"R_"+pfx)==0) ObjectDelete(0,nm);
    }
 }
 
@@ -5332,10 +5332,11 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
 
    //=================================================== CALCULO DO RESGATE
    PSect(pfx+"sec_calc", x, cur, pw2, "CALCULO DO RESGATE", dirClr); cur+=16;
-   PRowSOS(pfx+"r_perda", lx2, rx2, cur, "Perda Recompra:", -absLoss, C'255,82,82'); cur+=14;
+   ObjectDelete(0, PANEL_PREFIX+pfx+"r_buffer_l");
+   ObjectDelete(0, PANEL_PREFIX+"R_"+pfx+"r_buffer_v");
+   PRowSOS(pfx+"r_perda", lx2, rx2, cur, "Prejuízo Recompra:", -absLoss, C'255,82,82'); cur+=14;
    PRowSOS(pfx+"r_oposto", lx2, rx2, cur, "Lucro Oposto:", lucroOposto, lucroOposto>=0?C'0,200,83':C'255,82,82'); cur+=14;
-   PRowSOS(pfx+"r_buffer", lx2, rx2, cur, "Margem Custo:", buffer, CLR_TXT_LABEL); cur+=14;
-   PRowSOS(pfx+"r_necessario", lx2, rx2, cur, "Total Exigido:", necessario, CLR_TXT_PRIMARY); cur+=14;
+   PRowSOS(pfx+"r_necessario", lx2, rx2, cur, "Meta p/ Fechar:", necessario, CLR_TXT_PRIMARY); cur+=14;
    PRowSOS(pfx+"r_falta", lx2, rx2, cur, "Falta p/ Resgate:", pronto?0.0:falta, pronto?CLR_TEAL:CLR_AMBER, pronto); cur+=18;
 
    //=================================================== ALVO DE PRECO
