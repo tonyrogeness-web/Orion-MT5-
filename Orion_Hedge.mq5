@@ -251,6 +251,12 @@ double   g_DIMinus_Trend = 0;
 bool     g_BuySaidaZeroAtiva  = false;
 bool     g_SellSaidaZeroAtiva = false;
 
+// === MINI PAINEL S.O.S (CALCULO DE RESGATE) ===
+bool     g_SOSPanelBuyAberto   = false;
+bool     g_SOSPanelSellAberto  = false;
+int      g_SOSPanelBuyHeight   = 160;
+int      g_SOSPanelSellHeight  = 160;
+
 void SetBuySaidaZeroAtiva(bool val) {
    g_BuySaidaZeroAtiva = val;
    GlobalVariableSet("OrionHedge_SOS_BuyAtiva_" + _Symbol, val ? 1.0 : 0.0);
@@ -358,6 +364,7 @@ ENUM_TIMEFRAMES g_Ana_TF     = PERIOD_CURRENT;
 
 void LimparPainel();
 void DesenharPainel();
+void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight);
 void DesenharLinhas();
 void LimparLinhasAnalise();
 void DesenharLinhasAnalise();
@@ -2687,6 +2694,16 @@ void LimparPainel() {
 }
 
 //===================================================================
+// LIMPAR MINI PAINEL S.O.S (por instancia, prefixo "sb_" ou "ss_")
+//===================================================================
+void LimparPainelSOS(string pfx) {
+   for(int i=ObjectsTotal(0,0,-1)-1;i>=0;i--) {
+      string nm=ObjectName(0,i,0,-1);
+      if(StringFind(nm,PANEL_PREFIX+pfx)==0) ObjectDelete(0,nm);
+   }
+}
+
+//===================================================================
 // DESENHAR PAINEL — ESTILO ORIGINAL V3.22
 //===================================================================
 // LIMPAR CONTEUDO (mantém header/border/botoes) — fix sobreposição
@@ -3788,6 +3805,13 @@ void DesenharPainel() {
    g_PanelHeight=cur-py;
    ObjectSetInteger(0,PANEL_PREFIX+"border",OBJPROP_YSIZE,g_PanelHeight+2);
    ObjectSetInteger(0,PANEL_PREFIX+"bg_main",OBJPROP_YSIZE,g_PanelHeight);
+
+   //=======================================================  MINI PAINEIS S.O.S (FLUTUANTES)
+   int sosX = px+pw+14;
+   int sosHeightBuy=0, sosHeightSell=0;
+   DesenharPainelSOS(true, sosX, py, sosHeightBuy);
+   int sosYSell = py + (g_SOSPanelBuyAberto ? sosHeightBuy+10 : 0);
+   DesenharPainelSOS(false, sosX, sosYSell, sosHeightSell);
 }
 
 // LINHAS VISUAIS NO GRAFICO
@@ -5164,129 +5188,175 @@ bool ObterDadosRecompraDirecao(bool isBuyRescue, int &level, ulong &ticket, doub
 }
 
 //===================================================================
-// SOS MANUAL: EXECUTAR RESGATE DO CESTO NO ZERO A ZERO
+// SOS: CALCULAR PRECO ALVO (GATILHO) NO CESTO OPOSTO
 //===================================================================
-void ExecutarResgateCesto(bool isBuyRescue) {
-   int level;
-   ulong ticket;
-   double loss;
-   double lucroOposto;
-   int magicOposto;
+bool CalcularAlvoSOS(bool isBuyRescue, double lucroOposto, double necessario, double &precoAlvo, double &precoAtual, double &distPts) {
+   double oppVolume = isBuyRescue ? g_SellVolume : g_BuyVolume;
+   double tickV = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double tickS = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+   precoAtual = isBuyRescue ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) : SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
+   if(oppVolume <= 0 || tickV <= 0 || tickS <= 0) {
+      precoAlvo = 0; distPts = 0;
+      return false;
+   }
+
+   double falta = necessario - lucroOposto;
+   if(falta <= 0) {
+      precoAlvo = precoAtual;
+      distPts = 0;
+      return true;
+   }
+
+   double deltaPreco = (falta / (oppVolume * tickV)) * tickS;
+   precoAlvo = isBuyRescue ? (precoAtual - deltaPreco) : (precoAtual + deltaPreco);
+   distPts = MathAbs(precoAlvo - precoAtual) / _Point;
+   return true;
+}
+
+//===================================================================
+// SOS MANUAL: EXECUTAR FECHAMENTO IMEDIATO NO ZERO A ZERO
+//===================================================================
+void ExecutarFechamentoImediatoSOS(bool isBuyRescue, ulong ticket, int level, int magicOposto, double loss, double lucroOposto) {
+   string dirPerdedora = isBuyRescue ? "COMPRA" : "VENDA";
+   AddLog("[S.O.S] Executando fechamento imediato da Recompra " + dirPerdedora + " N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) abatendo no cesto oposto (" + DoubleToString(lucroOposto, 2) + " USC).");
+
+   if(trade.PositionClose(ticket)) {
+      for(int i = PositionsTotal() - 1; i >= 0; i--) {
+         ulong t = PositionGetTicket(i);
+         if(t > 0 && PositionSelectByTicket(t)) {
+            if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+               trade.PositionClose(t);
+            }
+         }
+      }
+      if(isBuyRescue) {
+         g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
+      } else {
+         g_SellZoneOrigin = 0; g_SellEmTrailing = false;
+      }
+   } else {
+      AddLog("[S.O.S IMEDIATO] Erro ao fechar posição de resgate " + dirPerdedora + " N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
+   }
+}
+
+//===================================================================
+// SOS: ABRIR/FECHAR O MINI PAINEL (toggle ao clicar no botao S.O.S da grade)
+//===================================================================
+void AbrirFecharPainelSOS(bool isBuyRescue) {
+   if(isBuyRescue) g_SOSPanelBuyAberto = !g_SOSPanelBuyAberto;
+   else g_SOSPanelSellAberto = !g_SOSPanelSellAberto;
+}
+
+//===================================================================
+// MINI PAINEL S.O.S — CALCULO DE RESGATE ZERO A ZERO (FLUTUANTE)
+//===================================================================
+void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
+   string pfx = isBuyRescue ? "sb_" : "ss_";
+   bool aberto = isBuyRescue ? g_SOSPanelBuyAberto : g_SOSPanelSellAberto;
+
+   if(!aberto) {
+      LimparPainelSOS(pfx);
+      outHeight = 0;
+      return;
+   }
+
+   int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
    if(!ObterDadosRecompraDirecao(isBuyRescue, level, ticket, loss, lucroOposto, magicOposto)) {
-      MessageBox("Não há nenhuma Recompra (nível >= 2) aberta neste cesto para resgate.", "S.O.S Saída no Zero", MB_OK | MB_ICONINFORMATION);
+      if(isBuyRescue) g_SOSPanelBuyAberto = false; else g_SOSPanelSellAberto = false;
+      LimparPainelSOS(pfx);
+      outHeight = 0;
       return;
    }
 
    string dirPerdedora = isBuyRescue ? "COMPRA" : "VENDA";
    string dirVencedora = isBuyRescue ? "VENDA" : "COMPRA";
    bool isScheduled = isBuyRescue ? g_BuySaidaZeroAtiva : g_SellSaidaZeroAtiva;
-
-   // Caso 0: Já está agendado. Deseja cancelar?
-   if(isScheduled) {
-      string msg = "=== CANCELAR AGENDAMENTO S.O.S (" + dirPerdedora + " N" + IntegerToString(level) + ") ===\n\n";
-      msg += "O agendamento S.O.S já está ATIVO e monitorando este cesto em tempo real.\n\n";
-      msg += "Deseja DESATIVAR o monitoramento e o fechamento automático no Zero a Zero?";
-      int res = MessageBox(msg, "Desativar Agendamento S.O.S", MB_YESNO | MB_ICONQUESTION);
-      if(res == IDYES) {
-         if(isBuyRescue) SetBuySaidaZeroAtiva(false); else SetSellSaidaZeroAtiva(false);
-         AddLog("[S.O.S] Agendamento cancelado manualmente para " + dirPerdedora);
-         DesenharPainel();
-         ChartRedraw(0);
-      }
-      return;
-   }
+   color dirClr = isBuyRescue ? CLR_TEAL : CLR_RED;
 
    double absLoss = MathAbs(loss);
    double buffer = MathMax(1.00, absLoss * 0.10);
+   double necessario = absLoss + buffer;
+   double falta = necessario - lucroOposto;
+   bool pronto = (falta <= 0);
 
-   // Caso 1: Cesto oposto está em prejuízo -> Não dá pra fechar agora. Oferece agendamento.
-   if(lucroOposto <= 0) {
-      string msg = "=== RESGATAR RECOMPRA " + dirPerdedora + " N" + IntegerToString(level) + " ===\n\n";
-      msg += "⚠️ OPERAÇÃO IMEDIATA INDISPONÍVEL (Cesto Oposto sem Lucro):\n";
-      msg += "• Prejuízo da posição: " + DoubleToString(loss, 2) + " USC\n";
-      msg += "• Cesto oposto (" + dirVencedora + "): Em PREJUÍZO (" + DoubleToString(lucroOposto, 2) + " USC)\n\n";
-      msg += "Deseja ATIVAR O AGENDAMENTO (monitoramento automático)?\n\n";
-      msg += "O robô monitorará em segundo plano e executará a Saída no Zero a Zero automaticamente assim que o cesto de " + dirVencedora + " atingir o lucro compensatório exigido.";
-      
-      int res = MessageBox(msg, "Agendar Saída S.O.S no Zero a Zero?", MB_YESNO | MB_ICONQUESTION);
-      if(res == IDYES) {
-         if(isBuyRescue) SetBuySaidaZeroAtiva(true); else SetSellSaidaZeroAtiva(true);
-         AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
-         DesenharPainel();
-         ChartRedraw(0);
-      }
-      return;
-   }
+   double precoAlvo=0, precoAtual=0, distPts=0;
+   bool calcOk = CalcularAlvoSOS(isBuyRescue, lucroOposto, necessario, precoAlvo, precoAtual, distPts);
 
-   // Caso 2: Cesto oposto tem lucro, mas é insuficiente -> Oferece agendamento.
-   if(lucroOposto < absLoss + buffer) {
-      double falta = (absLoss + buffer) - lucroOposto;
-      string msg = "=== RESGATAR RECOMPRA " + dirPerdedora + " N" + IntegerToString(level) + " ===\n\n";
-      msg += "⚠️ OPERAÇÃO IMEDIATA INDISPONÍVEL (Lucro Insuficiente):\n";
-      msg += "• Perda a compensar: " + DoubleToString(loss, 2) + " USC\n";
-      msg += "• Lucro disponível (" + dirVencedora + "): +" + DoubleToString(lucroOposto, 2) + " USC\n";
-      msg += "• Margem de segurança: " + DoubleToString(buffer, 2) + " USC\n";
-      msg += "• Falta para resgate seguro: +" + DoubleToString(falta, 2) + " USC\n\n";
-      msg += "Deseja ATIVAR O AGENDAMENTO (monitoramento automático)?\n\n";
-      msg += "O robô monitorará em segundo plano e executará o resgate automaticamente assim que o cesto oposto atingir o lucro necessário.";
-      
-      int res = MessageBox(msg, "Agendar Saída S.O.S no Zero a Zero?", MB_YESNO | MB_ICONQUESTION);
-      if(res == IDYES) {
-         if(isBuyRescue) SetBuySaidaZeroAtiva(true); else SetSellSaidaZeroAtiva(true);
-         AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
-         DesenharPainel();
-         ChartRedraw(0);
-      }
-      return;
-   }
+   double volRecompra = 0;
+   if(PositionSelectByTicket(ticket)) volRecompra = PositionGetDouble(POSITION_VOLUME);
 
-   // Caso 3: Aprovado para fechamento imediato (Sim/Não) -> Dá opção de fechar na hora ou agendar.
-   double sobra = lucroOposto - (absLoss + buffer);
-   string msg = "=== CONFIRMAR RESGATE S.O.S (" + dirPerdedora + " N" + IntegerToString(level) + ") ===\n\n";
-   msg += "Esta operação fechará a última recompra IMEDIATAMENTE no \"Zero a Zero\", utilizando o lucro do cesto oposto.\n\n";
-   msg += "VALORES PARA COMPENSAÇÃO:\n";
-   msg += "• Posição a fechar: " + dirPerdedora + " N" + IntegerToString(level) + " (Prejuízo: " + DoubleToString(loss, 2) + " USC)\n";
-   msg += "• Lucro a ser consumido (" + dirVencedora + "): +" + DoubleToString(lucroOposto, 2) + " USC\n";
-   msg += "• Margem de segurança: " + DoubleToString(buffer, 2) + " USC\n\n";
-   msg += "✅ OPERAÇÃO APROVADA PARA FECHAMENTO IMEDIATO!\n";
-   msg += "Deseja executar o fechamento imediato agora?\n\n";
-   msg += "(Se clicar em NÃO, você poderá escolher agendar para depois).";
+   int pw2=260, pad2=10;
+   int lx2=x+pad2+4, rx2=x+pw2-pad2;
+   int cur=y;
+   int prevHeight = isBuyRescue ? g_SOSPanelBuyHeight : g_SOSPanelSellHeight;
 
-   int res = MessageBox(msg, "Confirmar Fechamento S.O.S Imediato", MB_YESNO | MB_ICONQUESTION);
-   if(res == IDYES) {
-      AddLog("[S.O.S] Executando fechamento imediato da Recompra " + dirPerdedora + " N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) abatendo no cesto oposto (" + DoubleToString(lucroOposto, 2) + " USC).");
-      
-      if(trade.PositionClose(ticket)) {
-         for(int i = PositionsTotal() - 1; i >= 0; i--) {
-            ulong t = PositionGetTicket(i);
-            if(t > 0 && PositionSelectByTicket(t)) {
-               if(PositionGetInteger(POSITION_MAGIC) == magicOposto && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-                  trade.PositionClose(t);
-               }
-            }
-         }
-         if(isBuyRescue) {
-            g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
-         } else {
-            g_SellZoneOrigin = 0; g_SellEmTrailing = false;
-         }
-      } else {
-         AddLog("[S.O.S IMEDIATO] Erro ao fechar posição de resgate " + dirPerdedora + " N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
-      }
-      DesenharPainel();
-      ChartRedraw(0);
+   PRect(pfx+"border", x-1, cur-1, pw2+2, prevHeight+2, CLR_LINE_HARD, CLR_LINE_HARD, 198);
+   PRect(pfx+"bg",      x,   cur,   pw2,   prevHeight,   CLR_BG_BASE, -1, 199);
+
+   //=================================================== HEADER
+   PRect(pfx+"hdr_bg",  x, cur, pw2, 32, CLR_BG_HEADER, -1, 200);
+   PRect(pfx+"hdr_top", x, cur, pw2, 2, isScheduled?CLR_AMBER:CLR_RED, -1, 201); cur+=2;
+   PLabel(pfx+"hdr_title", x+pad2, cur+6, "S.O.S — "+dirPerdedora+" N"+IntegerToString(level), CLR_TXT_PRIMARY, 9, true);
+   string statusTxt = isScheduled ? "AGENDADO - MONITORANDO" : (pronto ? "PRONTO PARA FECHAR" : "AGUARDANDO LUCRO");
+   color statusClr = isScheduled ? CLR_AMBER : (pronto ? CLR_TEAL : CLR_RED);
+   PLabel(pfx+"hdr_status", x+pad2, cur+19, statusTxt, statusClr, 7, true);
+   PButton(pfx+"btn_x", x+pw2-22, cur+5, 18, 18, "X", CLR_BG_CARD, CLR_TXT_LABEL);
+   cur+=32+6;
+
+   //=================================================== CALCULO DO RESGATE
+   PSect(pfx+"sec_calc", x, cur, pw2, "CALCULO DO RESGATE", dirClr); cur+=16;
+   PRow(pfx+"r_perda", lx2, rx2, cur, "Perda a Compensar:", "-"+DoubleToString(absLoss,2)+" USC", C'255,82,82'); cur+=14;
+   PRow(pfx+"r_oposto", lx2, rx2, cur, "Lucro Cesto "+dirVencedora+":", (lucroOposto>=0?"+":"")+DoubleToString(lucroOposto,2)+" USC", lucroOposto>=0?C'0,200,83':C'255,82,82'); cur+=14;
+   PRow(pfx+"r_buffer", lx2, rx2, cur, "Margem Seguranca:", DoubleToString(buffer,2)+" USC", CLR_TXT_LABEL); cur+=14;
+   PRow(pfx+"r_necessario", lx2, rx2, cur, "Total Necessario:", DoubleToString(necessario,2)+" USC", CLR_TXT_PRIMARY); cur+=14;
+   string faltaStr = pronto ? "PRONTO!" : ("+"+DoubleToString(falta,2)+" USC");
+   PRow(pfx+"r_falta", lx2, rx2, cur, "Falta p/ Acionar:", faltaStr, pronto?CLR_TEAL:CLR_AMBER); cur+=18;
+
+   //=================================================== ALVO DE PRECO
+   PSect(pfx+"sec_alvo", x, cur, pw2, "ALVO DE PRECO (GATILHO)", CLR_BLUE); cur+=16;
+   ObjectDelete(0, PANEL_PREFIX+pfx+"r_atual_l");
+   ObjectDelete(0, PANEL_PREFIX+"R_"+pfx+"r_atual_v");
+   ObjectDelete(0, PANEL_PREFIX+pfx+"r_alvo_l");
+   ObjectDelete(0, PANEL_PREFIX+"R_"+pfx+"r_alvo_v");
+   ObjectDelete(0, PANEL_PREFIX+pfx+"r_dist_l");
+   ObjectDelete(0, PANEL_PREFIX+"R_"+pfx+"r_dist_v");
+   ObjectDelete(0, PANEL_PREFIX+pfx+"bar_prox_bg");
+   ObjectDelete(0, PANEL_PREFIX+pfx+"bar_prox_fill");
+   ObjectDelete(0, PANEL_PREFIX+pfx+"r_semcalc");
+   if(calcOk) {
+      PRow(pfx+"r_atual", lx2, rx2, cur, "Preco Atual:", DoubleToString(precoAtual,_Digits), CLR_TXT_PRIMARY); cur+=14;
+      string alvoStr = pronto ? "ATINGIDO!" : DoubleToString(precoAlvo,_Digits);
+      PRow(pfx+"r_alvo", lx2, rx2, cur, "Alvo (Gatilho):", alvoStr, pronto?CLR_TEAL:CLR_BLUE); cur+=14;
+      string distStr = pronto ? "0 pts" : (DoubleToString(distPts,0)+" pts");
+      PRow(pfx+"r_dist", lx2, rx2, cur, "Distancia:", distStr, pronto?CLR_TEAL:CLR_TXT_LABEL); cur+=12;
+      double pctProx = pronto ? 1.0 : MathMax(0.0, MathMin(1.0, 1.0 - (falta/necessario)));
+      PBar(pfx+"bar_prox", lx2, cur, pw2-(pad2*2)-8, 8, pctProx, CLR_LINE_SOFT, pronto?CLR_TEAL:CLR_AMBER); cur+=16;
    } else {
-      // Pergunta se quer agendar já que não quis fechar imediatamente
-      string msgSched = "Deseja deixar a Saída S.O.S AGENDADA de forma automática para este cesto?";
-      int resSched = MessageBox(msgSched, "Agendar Saída S.O.S?", MB_YESNO | MB_ICONQUESTION);
-      if(resSched == IDYES) {
-         if(isBuyRescue) SetBuySaidaZeroAtiva(true); else SetSellSaidaZeroAtiva(true);
-         AddLog("[S.O.S] Agendamento ATIVADO para " + dirPerdedora + " N" + IntegerToString(level));
-         DesenharPainel();
-         ChartRedraw(0);
-      }
+      PLabel(pfx+"r_semcalc", lx2, cur, "Calculo indisponivel (volume/tick invalido)", CLR_TXT_DIM, 8); cur+=16;
    }
+   PRow(pfx+"r_vol", lx2, rx2, cur, "Volume Recompra:", DoubleToString(volRecompra,3)+" L", CLR_TXT_LABEL); cur+=18;
+
+   //=================================================== BOTOES DE ACAO
+   int bw2 = pw2-(pad2*2)+4;
+   ObjectDelete(0, PANEL_PREFIX+pfx+"btn_cancelar");
+   ObjectDelete(0, PANEL_PREFIX+pfx+"btn_fechar_agora");
+   ObjectDelete(0, PANEL_PREFIX+pfx+"btn_agendar");
+   if(isScheduled) {
+      PButton(pfx+"btn_cancelar", x+pad2-2, cur, bw2, 22, "CANCELAR AGENDAMENTO", CLR_RED_DIM, CLR_RED); cur+=26;
+   } else if(pronto) {
+      PButton(pfx+"btn_fechar_agora", x+pad2-2, cur, bw2, 24, "FECHAR AGORA (ZERO A ZERO)", CLR_TEAL_DIM, CLR_TEAL); cur+=28;
+      PButton(pfx+"btn_agendar", x+pad2-2, cur, bw2, 20, "AGENDAR MESMO ASSIM", CLR_BG_CARD, CLR_AMBER); cur+=24;
+   } else {
+      PButton(pfx+"btn_agendar", x+pad2-2, cur, bw2, 24, "AGENDAR RESGATE AUTOMATICO", CLR_BG_CARD, CLR_AMBER); cur+=28;
+   }
+   cur+=4;
+
+   int finalHeight = cur-y;
+   if(isBuyRescue) g_SOSPanelBuyHeight = finalHeight; else g_SOSPanelSellHeight = finalHeight;
+   ObjectSetInteger(0, PANEL_PREFIX+pfx+"border", OBJPROP_YSIZE, finalHeight+2);
+   ObjectSetInteger(0, PANEL_PREFIX+pfx+"bg",     OBJPROP_YSIZE, finalHeight);
+   outHeight = finalHeight;
 }
 
 //===================================================================
@@ -5294,14 +5364,67 @@ void ExecutarResgateCesto(bool isBuyRescue) {
 //===================================================================
 void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp) {
    if(id==CHARTEVENT_OBJECT_CLICK) {
-      // Botão S.O.S Saída no Zero a Zero para cesto de Compra
+      // Botão S.O.S na grade — abre/fecha o mini painel de cálculo
       if(sp == PANEL_PREFIX + "btn_buy_sos") {
-         ExecutarResgateCesto(true);
+         AbrirFecharPainelSOS(true);
+         DesenharPainel(); ChartRedraw(0);
          return;
       }
-      // Botão S.O.S Saída no Zero a Zero para cesto de Venda
       if(sp == PANEL_PREFIX + "btn_sel_sos") {
-         ExecutarResgateCesto(false);
+         AbrirFecharPainelSOS(false);
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+
+      // Mini painel S.O.S — fechar (X)
+      if(sp == PANEL_PREFIX + "sb_btn_x") { g_SOSPanelBuyAberto=false; DesenharPainel(); ChartRedraw(0); return; }
+      if(sp == PANEL_PREFIX + "ss_btn_x") { g_SOSPanelSellAberto=false; DesenharPainel(); ChartRedraw(0); return; }
+
+      // Mini painel S.O.S — cancelar agendamento
+      if(sp == PANEL_PREFIX + "sb_btn_cancelar") {
+         SetBuySaidaZeroAtiva(false);
+         AddLog("[S.O.S] Agendamento cancelado manualmente para COMPRA");
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      if(sp == PANEL_PREFIX + "ss_btn_cancelar") {
+         SetSellSaidaZeroAtiva(false);
+         AddLog("[S.O.S] Agendamento cancelado manualmente para VENDA");
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+
+      // Mini painel S.O.S — agendar resgate automático
+      if(sp == PANEL_PREFIX + "sb_btn_agendar") {
+         SetBuySaidaZeroAtiva(true);
+         AddLog("[S.O.S] Agendamento ATIVADO para COMPRA");
+         g_SOSPanelBuyAberto=false;
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      if(sp == PANEL_PREFIX + "ss_btn_agendar") {
+         SetSellSaidaZeroAtiva(true);
+         AddLog("[S.O.S] Agendamento ATIVADO para VENDA");
+         g_SOSPanelSellAberto=false;
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+
+      // Mini painel S.O.S — fechar agora (zero a zero imediato)
+      if(sp == PANEL_PREFIX + "sb_btn_fechar_agora") {
+         int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
+         if(ObterDadosRecompraDirecao(true, level, ticket, loss, lucroOposto, magicOposto))
+            ExecutarFechamentoImediatoSOS(true, ticket, level, magicOposto, loss, lucroOposto);
+         g_SOSPanelBuyAberto=false;
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      if(sp == PANEL_PREFIX + "ss_btn_fechar_agora") {
+         int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
+         if(ObterDadosRecompraDirecao(false, level, ticket, loss, lucroOposto, magicOposto))
+            ExecutarFechamentoImediatoSOS(false, ticket, level, magicOposto, loss, lucroOposto);
+         g_SOSPanelSellAberto=false;
+         DesenharPainel(); ChartRedraw(0);
          return;
       }
       // Bloquear seletor de filtros se o Trailing de Patrimonio estiver ativo
