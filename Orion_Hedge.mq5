@@ -5249,6 +5249,32 @@ void AbrirFecharPainelSOS(bool isBuyRescue) {
 }
 
 //===================================================================
+// HELPER PARA LINHAS COM CONVERSÃO BRL NO MINI PAINEL S.O.S
+//===================================================================
+void PRowSOS(string id, int lx, int rx, int y, string lbl, double valUSC, color cv, bool isPronto = false) {
+   double valBRL = isPronto ? 0.0 : UscToBrl(valUSC);
+   string brlStr = "  [" + FormatBRL(valBRL) + "]";
+   PLabel(id+"_l", lx, y, lbl + brlStr, CLR_TXT_LABEL, 8);
+   
+   if (isPronto) {
+      PLabelR(id+"_v", rx, y, "PRONTO!", cv, 8);
+   } else {
+      string sign = (valUSC > 0.005) ? "+" : "";
+      if (lbl == "Margem Custo:" || lbl == "Total Exigido:") sign = ""; 
+      string valStr = sign + DoubleToString(valUSC, 2) + " USC";
+      PLabelR(id+"_v", rx, y, valStr, cv, 8);
+   }
+}
+
+//===================================================================
+// HELPER PARA LINHAS SIMPLES (TEXTO) NO MINI PAINEL S.O.S
+//===================================================================
+void PRow8(string id, int lx, int rx, int y, string lbl, string val, color cv) {
+   PLabel(id+"_l", lx, y, lbl, CLR_TXT_LABEL, 8);
+   PLabelR(id+"_v", rx, y, val, cv, 8);
+}
+
+//===================================================================
 // MINI PAINEL S.O.S — CALCULO DE RESGATE ZERO A ZERO (FLUTUANTE)
 //===================================================================
 void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
@@ -5306,12 +5332,11 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
 
    //=================================================== CALCULO DO RESGATE
    PSect(pfx+"sec_calc", x, cur, pw2, "CALCULO DO RESGATE", dirClr); cur+=16;
-   PRow(pfx+"r_perda", lx2, rx2, cur, "Perda a Compensar:", "-"+DoubleToString(absLoss,2)+" USC", C'255,82,82'); cur+=14;
-   PRow(pfx+"r_oposto", lx2, rx2, cur, "Lucro Cesto "+dirVencedora+":", (lucroOposto>=0?"+":"")+DoubleToString(lucroOposto,2)+" USC", lucroOposto>=0?C'0,200,83':C'255,82,82'); cur+=14;
-   PRow(pfx+"r_buffer", lx2, rx2, cur, "Margem Seguranca:", DoubleToString(buffer,2)+" USC", CLR_TXT_LABEL); cur+=14;
-   PRow(pfx+"r_necessario", lx2, rx2, cur, "Total Necessario:", DoubleToString(necessario,2)+" USC", CLR_TXT_PRIMARY); cur+=14;
-   string faltaStr = pronto ? "PRONTO!" : ("+"+DoubleToString(falta,2)+" USC");
-   PRow(pfx+"r_falta", lx2, rx2, cur, "Falta p/ Acionar:", faltaStr, pronto?CLR_TEAL:CLR_AMBER); cur+=18;
+   PRowSOS(pfx+"r_perda", lx2, rx2, cur, "Perda Recompra:", -absLoss, C'255,82,82'); cur+=14;
+   PRowSOS(pfx+"r_oposto", lx2, rx2, cur, "Lucro Oposto:", lucroOposto, lucroOposto>=0?C'0,200,83':C'255,82,82'); cur+=14;
+   PRowSOS(pfx+"r_buffer", lx2, rx2, cur, "Margem Custo:", buffer, CLR_TXT_LABEL); cur+=14;
+   PRowSOS(pfx+"r_necessario", lx2, rx2, cur, "Total Exigido:", necessario, CLR_TXT_PRIMARY); cur+=14;
+   PRowSOS(pfx+"r_falta", lx2, rx2, cur, "Falta p/ Resgate:", pronto?0.0:falta, pronto?CLR_TEAL:CLR_AMBER, pronto); cur+=18;
 
    //=================================================== ALVO DE PRECO
    PSect(pfx+"sec_alvo", x, cur, pw2, "ALVO DE PRECO (GATILHO)", CLR_BLUE); cur+=16;
@@ -5325,17 +5350,17 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
    ObjectDelete(0, PANEL_PREFIX+pfx+"bar_prox_fill");
    ObjectDelete(0, PANEL_PREFIX+pfx+"r_semcalc");
    if(calcOk) {
-      PRow(pfx+"r_atual", lx2, rx2, cur, "Preco Atual:", DoubleToString(precoAtual,_Digits), CLR_TXT_PRIMARY); cur+=14;
+      PRow8(pfx+"r_atual", lx2, rx2, cur, "Preco Atual:", DoubleToString(precoAtual,_Digits), CLR_TXT_PRIMARY); cur+=14;
       string alvoStr = pronto ? "ATINGIDO!" : DoubleToString(precoAlvo,_Digits);
-      PRow(pfx+"r_alvo", lx2, rx2, cur, "Alvo (Gatilho):", alvoStr, pronto?CLR_TEAL:CLR_BLUE); cur+=14;
+      PRow8(pfx+"r_alvo", lx2, rx2, cur, "Alvo (Gatilho):", alvoStr, pronto?CLR_TEAL:CLR_BLUE); cur+=14;
       string distStr = pronto ? "0 pts" : (DoubleToString(distPts,0)+" pts");
-      PRow(pfx+"r_dist", lx2, rx2, cur, "Distancia:", distStr, pronto?CLR_TEAL:CLR_TXT_LABEL); cur+=12;
+      PRow8(pfx+"r_dist", lx2, rx2, cur, "Distancia:", distStr, pronto?CLR_TEAL:CLR_TXT_LABEL); cur+=12;
       double pctProx = pronto ? 1.0 : MathMax(0.0, MathMin(1.0, 1.0 - (falta/necessario)));
       PBar(pfx+"bar_prox", lx2, cur, pw2-(pad2*2)-8, 8, pctProx, CLR_LINE_SOFT, pronto?CLR_TEAL:CLR_AMBER); cur+=16;
    } else {
       PLabel(pfx+"r_semcalc", lx2, cur, "Calculo indisponivel (volume/tick invalido)", CLR_TXT_DIM, 8); cur+=16;
    }
-   PRow(pfx+"r_vol", lx2, rx2, cur, "Volume Recompra:", DoubleToString(volRecompra,3)+" L", CLR_TXT_LABEL); cur+=18;
+   PRow8(pfx+"r_vol", lx2, rx2, cur, "Volume Recompra:", DoubleToString(volRecompra,3)+" L", CLR_TXT_LABEL); cur+=18;
 
    //=================================================== BOTOES DE ACAO
    int bw2 = pw2-(pad2*2)+4;
