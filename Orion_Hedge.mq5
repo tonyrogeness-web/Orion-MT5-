@@ -257,6 +257,12 @@ bool     g_SOSPanelSellAberto  = false;
 int      g_SOSPanelBuyHeight   = 160;
 int      g_SOSPanelSellHeight  = 160;
 
+bool     g_SOSForceBuyAguardando = false;
+datetime g_SOSForceBuyTimestamp = 0;
+bool     g_SOSForceSellAguardando = false;
+datetime g_SOSForceSellTimestamp = 0;
+
+
 void SetBuySaidaZeroAtiva(bool val) {
    g_BuySaidaZeroAtiva = val;
    GlobalVariableSet("OrionHedge_SOS_BuyAtiva_" + _Symbol, val ? 1.0 : 0.0);
@@ -5232,8 +5238,10 @@ void ExecutarFechamentoImediatoSOS(bool isBuyRescue, ulong ticket, int level, in
       }
       if(isBuyRescue) {
          g_BuyZoneOrigin = 0; g_BuyEmTrailing = false;
+         SetBuySaidaZeroAtiva(false);
       } else {
          g_SellZoneOrigin = 0; g_SellEmTrailing = false;
+         SetSellSaidaZeroAtiva(false);
       }
    } else {
       AddLog("[S.O.S IMEDIATO] Erro ao fechar posição de resgate " + dirPerdedora + " N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
@@ -5244,8 +5252,13 @@ void ExecutarFechamentoImediatoSOS(bool isBuyRescue, ulong ticket, int level, in
 // SOS: ABRIR/FECHAR O MINI PAINEL (toggle ao clicar no botao S.O.S da grade)
 //===================================================================
 void AbrirFecharPainelSOS(bool isBuyRescue) {
-   if(isBuyRescue) g_SOSPanelBuyAberto = !g_SOSPanelBuyAberto;
-   else g_SOSPanelSellAberto = !g_SOSPanelSellAberto;
+   if(isBuyRescue) {
+      g_SOSPanelBuyAberto = !g_SOSPanelBuyAberto;
+      g_SOSForceBuyAguardando = false;
+   } else {
+      g_SOSPanelSellAberto = !g_SOSPanelSellAberto;
+      g_SOSForceSellAguardando = false;
+   }
 }
 
 //===================================================================
@@ -5334,8 +5347,8 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
    PSect(pfx+"sec_calc", x, cur, pw2, "CALCULO DO RESGATE", dirClr); cur+=16;
    ObjectDelete(0, PANEL_PREFIX+pfx+"r_buffer_l");
    ObjectDelete(0, PANEL_PREFIX+"R_"+pfx+"r_buffer_v");
-   PRowSOS(pfx+"r_perda", lx2, rx2, cur, "Prejuízo Recompra:", -absLoss, C'255,82,82'); cur+=14;
-   PRowSOS(pfx+"r_oposto", lx2, rx2, cur, "Lucro Oposto:", lucroOposto, lucroOposto>=0?C'0,200,83':C'255,82,82'); cur+=14;
+   PRowSOS(pfx+"r_perda", lx2, rx2, cur, "Prejuízo Real:", -absLoss, C'255,82,82'); cur+=14;
+   PRowSOS(pfx+"r_oposto", lx2, rx2, cur, "Lucro do Outro Lado:", lucroOposto, lucroOposto>=0?C'0,200,83':C'255,82,82'); cur+=14;
    PRowSOS(pfx+"r_necessario", lx2, rx2, cur, "Meta p/ Fechar:", necessario, CLR_TXT_PRIMARY); cur+=14;
    PRowSOS(pfx+"r_falta", lx2, rx2, cur, "Falta p/ Resgate:", pronto?0.0:falta, pronto?CLR_TEAL:CLR_AMBER, pronto); cur+=18;
 
@@ -5368,6 +5381,8 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
    ObjectDelete(0, PANEL_PREFIX+pfx+"btn_cancelar");
    ObjectDelete(0, PANEL_PREFIX+pfx+"btn_fechar_agora");
    ObjectDelete(0, PANEL_PREFIX+pfx+"btn_agendar");
+   ObjectDelete(0, PANEL_PREFIX+pfx+"btn_forcar_zeragem");
+
    if(isScheduled) {
       PButton(pfx+"btn_cancelar", x+pad2-2, cur, bw2, 22, "CANCELAR AGENDAMENTO", CLR_RED_DIM, CLR_RED); cur+=26;
    } else if(pronto) {
@@ -5375,6 +5390,25 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
       PButton(pfx+"btn_agendar", x+pad2-2, cur, bw2, 20, "AGENDAR MESMO ASSIM", CLR_BG_CARD, CLR_AMBER); cur+=24;
    } else {
       PButton(pfx+"btn_agendar", x+pad2-2, cur, bw2, 24, "AGENDAR RESGATE AUTOMATICO", CLR_BG_CARD, CLR_AMBER); cur+=28;
+   }
+
+   if(!pronto) {
+      bool forceAguardando = isBuyRescue ? g_SOSForceBuyAguardando : g_SOSForceSellAguardando;
+      datetime forceTime = isBuyRescue ? g_SOSForceBuyTimestamp : g_SOSForceSellTimestamp;
+      
+      if(forceAguardando && TimeCurrent() - forceTime > 3) {
+         if(isBuyRescue) g_SOSForceBuyAguardando = false; else g_SOSForceSellAguardando = false;
+         forceAguardando = false;
+      }
+      
+      if(forceAguardando) {
+         PButton(pfx+"btn_forcar_zeragem", x+pad2-2, cur, bw2, 24, "⚠️ CONFIRMAR ZERAGEM EM 3s?", CLR_RED, CLR_TXT_PRIMARY); cur+=28;
+      } else {
+         double totalLossUSC = -absLoss + lucroOposto;
+         double totalLossBRL = UscToBrl(totalLossUSC);
+         string btnText = "FORÇAR ZERAGEM  [" + FormatBRL(totalLossBRL) + "]";
+         PButton(pfx+"btn_forcar_zeragem", x+pad2-2, cur, bw2, 22, btnText, CLR_RED_DIM, CLR_RED); cur+=26;
+      }
    }
    cur+=4;
 
@@ -5450,6 +5484,43 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          if(ObterDadosRecompraDirecao(false, level, ticket, loss, lucroOposto, magicOposto))
             ExecutarFechamentoImediatoSOS(false, ticket, level, magicOposto, loss, lucroOposto);
          g_SOSPanelSellAberto=false;
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      // Mini painel S.O.S — forçar zeragem
+      if(sp == PANEL_PREFIX + "sb_btn_forcar_zeragem") {
+         if(!g_SOSForceBuyAguardando) {
+            g_SOSForceBuyAguardando = true;
+            g_SOSForceBuyTimestamp = TimeCurrent();
+            AddLog("[S.O.S] Clique novamente em 3s para confirmar a ZERAGEM com prejuízo!");
+         } else if(TimeCurrent() - g_SOSForceBuyTimestamp <= 3) {
+            g_SOSForceBuyAguardando = false;
+            int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
+            if(ObterDadosRecompraDirecao(true, level, ticket, loss, lucroOposto, magicOposto))
+               ExecutarFechamentoImediatoSOS(true, ticket, level, magicOposto, loss, lucroOposto);
+            g_SOSPanelBuyAberto = false;
+         } else {
+            g_SOSForceBuyAguardando = false;
+            AddLog("[S.O.S] Confirmação expirou. Zeragem cancelada.");
+         }
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      if(sp == PANEL_PREFIX + "ss_btn_forcar_zeragem") {
+         if(!g_SOSForceSellAguardando) {
+            g_SOSForceSellAguardando = true;
+            g_SOSForceSellTimestamp = TimeCurrent();
+            AddLog("[S.O.S] Clique novamente em 3s para confirmar a ZERAGEM com prejuízo!");
+         } else if(TimeCurrent() - g_SOSForceSellTimestamp <= 3) {
+            g_SOSForceSellAguardando = false;
+            int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
+            if(ObterDadosRecompraDirecao(false, level, ticket, loss, lucroOposto, magicOposto))
+               ExecutarFechamentoImediatoSOS(false, ticket, level, magicOposto, loss, lucroOposto);
+            g_SOSPanelSellAberto = false;
+         } else {
+            g_SOSForceSellAguardando = false;
+            AddLog("[S.O.S] Confirmação expirou. Zeragem cancelada.");
+         }
          DesenharPainel(); ChartRedraw(0);
          return;
       }
