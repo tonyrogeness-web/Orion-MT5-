@@ -5273,7 +5273,6 @@ void PRowSOS(string id, int lx, int rx, int y, string lbl, double valUSC, color 
       PLabelR(id+"_v", rx, y, "PRONTO!", cv, 8);
    } else {
       string sign = (valUSC > 0.005) ? "+" : "";
-      if (lbl == "Margem Custo:" || lbl == "Total Exigido:") sign = ""; 
       string valStr = sign + DoubleToString(valUSC, 2) + " USC";
       PLabelR(id+"_v", rx, y, valStr, cv, 8);
    }
