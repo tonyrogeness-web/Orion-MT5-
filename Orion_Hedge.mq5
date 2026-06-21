@@ -251,6 +251,10 @@ double   g_DIMinus_Trend = 0;
 bool     g_BuySaidaZeroAtiva  = false;
 bool     g_SellSaidaZeroAtiva = false;
 
+// === WIDGET DE STATUS (CANTO SUPERIOR DIREITO) ===
+datetime g_LastTickTime       = 0;
+int      g_AnaliseLegendHeight = 0;
+
 // === MINI PAINEL S.O.S (CALCULO DE RESGATE) ===
 bool     g_SOSPanelBuyAberto   = false;
 bool     g_SOSPanelSellAberto  = false;
@@ -2346,6 +2350,7 @@ void ProcessarAgendamentoSOS() {
 // ONTICK — MOTOR HEDGE
 //===================================================================
 void OnTick() {
+   g_LastTickTime = TimeCurrent();
    if(!MQLInfoInteger(MQL_TRADE_ALLOWED)) return;
 
    AtualizarEstadoNoticias();
@@ -2707,6 +2712,141 @@ void LimparPainelSOS(string pfx) {
       string nm=ObjectName(0,i,0,-1);
       if(StringFind(nm,PANEL_PREFIX+pfx)==0 || StringFind(nm,PANEL_PREFIX+"R_"+pfx)==0) ObjectDelete(0,nm);
    }
+}
+
+//===================================================================
+// HELPERS DE DESENHO ANCORADOS NO CANTO SUPERIOR DIREITO (WIDGET DE STATUS)
+//===================================================================
+void PRectTR(string nm,int x,int y,int w,int h,color bg,long brd=-1,int z=200){
+   string n=PANEL_PREFIX+nm;
+   if(ObjectFind(0,n)<0)ObjectCreate(0,n,OBJ_RECTANGLE_LABEL,0,0,0);
+   ObjectSetInteger(0,n,OBJPROP_XDISTANCE,x);ObjectSetInteger(0,n,OBJPROP_YDISTANCE,y);
+   ObjectSetInteger(0,n,OBJPROP_XSIZE,w);ObjectSetInteger(0,n,OBJPROP_YSIZE,h);
+   ObjectSetInteger(0,n,OBJPROP_BGCOLOR,bg);ObjectSetInteger(0,n,OBJPROP_BORDER_TYPE,BORDER_FLAT);
+   ObjectSetInteger(0,n,OBJPROP_COLOR,brd>=0?(color)brd:bg);ObjectSetInteger(0,n,OBJPROP_WIDTH,brd>=0?1:0);
+   ObjectSetInteger(0,n,OBJPROP_CORNER,CORNER_RIGHT_UPPER);ObjectSetInteger(0,n,OBJPROP_BACK,false);
+   ObjectSetInteger(0,n,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,n,OBJPROP_HIDDEN,true);ObjectSetInteger(0,n,OBJPROP_ZORDER,z);
+}
+void PLabelTR(string nm,int x,int y,string txt,color clr,int sz=9,bool bold=false){
+   string n=PANEL_PREFIX+nm;
+   if(ObjectFind(0,n)<0)ObjectCreate(0,n,OBJ_LABEL,0,0,0);
+   ObjectSetInteger(0,n,OBJPROP_XDISTANCE,x);ObjectSetInteger(0,n,OBJPROP_YDISTANCE,y);
+   ObjectSetString(0,n,OBJPROP_TEXT,txt);ObjectSetInteger(0,n,OBJPROP_COLOR,clr);
+   ObjectSetString(0,n,OBJPROP_FONT,bold?"Consolas Bold":"Consolas");ObjectSetInteger(0,n,OBJPROP_FONTSIZE,sz);
+   ObjectSetInteger(0,n,OBJPROP_CORNER,CORNER_RIGHT_UPPER);ObjectSetInteger(0,n,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER);
+   ObjectSetInteger(0,n,OBJPROP_BACK,false);ObjectSetInteger(0,n,OBJPROP_SELECTABLE,false);
+   ObjectSetInteger(0,n,OBJPROP_HIDDEN,true);ObjectSetInteger(0,n,OBJPROP_ZORDER,250);
+}
+void PLabelRTR(string nm,int x,int y,string txt,color clr,int sz=9,bool bold=false){
+   string n=PANEL_PREFIX+nm;
+   if(ObjectFind(0,n)<0)ObjectCreate(0,n,OBJ_LABEL,0,0,0);
+   ObjectSetInteger(0,n,OBJPROP_XDISTANCE,x);ObjectSetInteger(0,n,OBJPROP_YDISTANCE,y);
+   ObjectSetString(0,n,OBJPROP_TEXT,txt);ObjectSetInteger(0,n,OBJPROP_COLOR,clr);
+   ObjectSetString(0,n,OBJPROP_FONT,bold?"Consolas Bold":"Consolas");ObjectSetInteger(0,n,OBJPROP_FONTSIZE,sz);
+   ObjectSetInteger(0,n,OBJPROP_CORNER,CORNER_RIGHT_UPPER);ObjectSetInteger(0,n,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
+   ObjectSetInteger(0,n,OBJPROP_BACK,false);ObjectSetInteger(0,n,OBJPROP_SELECTABLE,false);
+   ObjectSetInteger(0,n,OBJPROP_HIDDEN,true);ObjectSetInteger(0,n,OBJPROP_ZORDER,250);
+}
+void PRowTR(string id,int lx,int rx,int y,string lbl,string val,color cv){
+   PLabelTR(id+"_l",lx,y,lbl,CLR_TXT_LABEL,9);
+   PLabelRTR(id+"_v",rx,y,val,cv,9);
+}
+
+//===================================================================
+// STATUS DE SESSAO DE MERCADO (usa as sessoes reais configuradas pelo broker)
+//===================================================================
+bool ObterStatusSessaoMercado(bool &aberto, datetime &proximaTransicao) {
+   datetime agora = TimeCurrent();
+   MqlDateTime dtAgora;
+   TimeToStruct(agora, dtAgora);
+
+   for(int dayOffset = 0; dayOffset <= 7; dayOffset++) {
+      datetime diaBase = agora - (dtAgora.hour*3600 + dtAgora.min*60 + dtAgora.sec) + (dayOffset * 86400);
+      MqlDateTime dtDia;
+      TimeToStruct(diaBase, dtDia);
+      ENUM_DAY_OF_WEEK diaSemana = (ENUM_DAY_OF_WEEK)dtDia.day_of_week;
+
+      for(uint i = 0; i < 5; i++) {
+         datetime from, to;
+         if(!SymbolInfoSessionTrade(_Symbol, diaSemana, i, from, to)) break;
+         long fromSec = (long)(from - D'1970.01.01 00:00:00');
+         long toSec   = (long)(to   - D'1970.01.01 00:00:00');
+         datetime sessFrom = diaBase + fromSec;
+         datetime sessTo   = diaBase + toSec;
+
+         if(dayOffset == 0 && agora >= sessFrom && agora < sessTo) {
+            aberto = true;
+            proximaTransicao = sessTo;
+            return true;
+         }
+         if(sessFrom > agora) {
+            aberto = false;
+            proximaTransicao = sessFrom;
+            return true;
+         }
+      }
+   }
+   aberto = false;
+   proximaTransicao = 0;
+   return false;
+}
+
+//===================================================================
+// FORMATAR DURACAO EM TEXTO COMPACTO (Xd Yh / Yh Zm / Zm)
+//===================================================================
+string FormatDuracao(long segundos) {
+   if(segundos < 0) segundos = 0;
+   long dias  = segundos / 86400;
+   long horas = (segundos % 86400) / 3600;
+   long mins  = (segundos % 3600) / 60;
+   if(dias > 0) return IntegerToString(dias) + "d " + IntegerToString(horas) + "h";
+   if(horas > 0) return IntegerToString(horas) + "h " + IntegerToString(mins) + "m";
+   return IntegerToString(mins) + "m";
+}
+
+//===================================================================
+// WIDGET DE STATUS (CANTO SUPERIOR DIREITO): conexao + sessao de mercado
+//===================================================================
+void DesenharWidgetStatus() {
+   int topo = 20 + g_AnaliseLegendHeight;
+   int w = 200, pad = 8;
+   int xRight = 10;
+   int xLeft  = xRight + w;
+   int lx = xLeft - pad;
+   int rx = xRight + pad;
+   int cur = topo;
+
+   PRectTR("st_border", xRight-1, cur-1, w+2, 56, CLR_LINE_HARD, CLR_LINE_HARD, 198);
+   PRectTR("st_bg",      xRight,   cur,   w,   54, CLR_BG_BASE,   -1,           199);
+   cur += 6;
+
+   long semTick = (g_LastTickTime > 0) ? (long)(TimeCurrent() - g_LastTickTime) : 0;
+   bool mercadoAberto = false;
+   datetime proxTransicao = 0;
+   bool sessaoOk = ObterStatusSessaoMercado(mercadoAberto, proxTransicao);
+
+   bool alertaSemTick = (mercadoAberto && g_LastTickTime > 0 && semTick >= 30);
+
+   color dotClr   = alertaSemTick ? C'255,82,82' : C'0,200,83';
+   string statusTxt = alertaSemTick ? ("SEM TICKS HA " + IntegerToString(semTick) + "s") : "ONLINE";
+   PRectTR("st_dot", xLeft-pad-6, cur+3, 6, 6, dotClr, -1, 250);
+   PLabelTR("st_online", lx-10, cur, statusTxt, alertaSemTick?C'255,82,82':C'0,200,83', 8, true);
+   cur += 14;
+
+   if(!sessaoOk) {
+      PRowTR("st_sessao", lx, rx, cur, "SESSAO:", "INDISPONIVEL", CLR_TXT_DIM); cur += 14;
+      PRowTR("st_transicao", lx, rx, cur, "", "", CLR_TXT_DIM); cur += 14;
+   } else if(mercadoAberto) {
+      PRowTR("st_sessao", lx, rx, cur, "MERCADO:", "ABERTO", C'0,200,83'); cur += 14;
+      PRowTR("st_transicao", lx, rx, cur, "FECHA EM:", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
+   } else {
+      PRowTR("st_sessao", lx, rx, cur, "MERCADO:", "FECHADO", C'255,82,82'); cur += 14;
+      PRowTR("st_transicao", lx, rx, cur, "ABRE EM:", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
+   }
+
+   int alturaFinal = cur - topo + 4;
+   ObjectSetInteger(0, PANEL_PREFIX+"st_border", OBJPROP_YSIZE, alturaFinal+2);
+   ObjectSetInteger(0, PANEL_PREFIX+"st_bg",     OBJPROP_YSIZE, alturaFinal);
 }
 
 //===================================================================
@@ -3818,6 +3958,9 @@ void DesenharPainel() {
    DesenharPainelSOS(true, sosX, py, sosHeightBuy);
    int sosYSell = py + (g_SOSPanelBuyAberto ? sosHeightBuy+10 : 0);
    DesenharPainelSOS(false, sosX, sosYSell, sosHeightSell);
+
+   //=======================================================  WIDGET DE STATUS (CANTO SUPERIOR DIREITO)
+   DesenharWidgetStatus();
 }
 
 // LINHAS VISUAIS NO GRAFICO
@@ -4286,6 +4429,9 @@ void DesenharLegendaAnalise(int count, string &texts[], color &clrs[], string di
       ObjectSetInteger(0, btnNm, OBJPROP_FONTSIZE, 9);
       ObjectSetInteger(0, btnNm, OBJPROP_STATE, false);
       ObjectSetInteger(0, btnNm, OBJPROP_SELECTABLE, false);
+      g_AnaliseLegendHeight = 20 + (count * 14) + 10 + 20 + 10;
+   } else {
+      g_AnaliseLegendHeight = (count > 0) ? (20 + (count * 14) + 10) : 0;
    }
 }
 
@@ -5707,6 +5853,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
              LimparIndicadoresAnalise();
              LimparLinhasAnalise();
              g_LinhasModo = g_PreAnaliseLinhasModo; // [BUG-M2 FIX] Restaura preferencia do usuario
+             g_AnaliseLegendHeight = 0;
              AddLog("[ANALISE] Modo Analise DESATIVADO.");
          }
          LimparConteudoPainel(); // limpa sobreposicao imediatamente
