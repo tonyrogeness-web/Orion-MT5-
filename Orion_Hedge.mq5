@@ -2776,7 +2776,7 @@ string FormatDuracao(long segundos) {
 void DesenharWidgetStatus() {
    int chartW = (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS, 0);
    int w = 155, pad = 8;
-   int margemDireita = 58; // espaco para nao invadir a escala de precos do grafico
+   int margemDireita = 8; // alinhado bem ao canto proximo a escala de precos
    int x = chartW - w - margemDireita;
    if(x < 0) x = 0;
    int topo = 20 + g_AnaliseLegendHeight;
@@ -3351,7 +3351,7 @@ void DesenharPainel() {
     
     PLabel("lbl_pl_l", lx, cur+2, "P&L ABERTO", CLR_TXT_DIM, 8);
     PLabelR("lbl_pl_brl", lx + 160, cur+2, FormatBRL(global_total * fatBRL), CLR_TXT_DIM, 8);
-    PLabelR("lbl_pl_usc", rx - 55, cur+1, FormatUSC(global_total, true) + " USC", clrPl, 10, true);
+    PLabelR("lbl_pl_usc", rx - 55, cur+1, FormatUSC(global_total, true) + " UaSC", clrPl, 10, true);
     PLabelR("lbl_pl_pct", rx - 2, cur+2, sPctPl, clrPl, 8);
     cur += 16;
     
