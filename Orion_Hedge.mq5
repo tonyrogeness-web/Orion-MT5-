@@ -2721,7 +2721,7 @@ void LimparPainelSOS(string pfx) {
 // STATUS DE SESSAO DE MERCADO (usa as sessoes reais configuradas pelo broker)
 //===================================================================
 bool ObterStatusSessaoMercado(bool &aberto, datetime &proximaTransicao) {
-   datetime agora = TimeCurrent();
+   datetime agora = TimeTradeServer();
    MqlDateTime dtAgora;
    TimeToStruct(agora, dtAgora);
 
@@ -2775,8 +2775,8 @@ string FormatDuracao(long segundos) {
 //===================================================================
 void DesenharWidgetStatus() {
    int chartW = (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS, 0);
-   int w = 210, pad = 10;
-   int margemDireita = 75; // espaco para nao invadir a escala de precos do grafico
+   int w = 155, pad = 8;
+   int margemDireita = 58; // espaco para nao invadir a escala de precos do grafico
    int x = chartW - w - margemDireita;
    if(x < 0) x = 0;
    int topo = 20 + g_AnaliseLegendHeight;
@@ -2791,7 +2791,7 @@ void DesenharWidgetStatus() {
    PRect("st_bg",      x,   cur,   w,   g_StatusWidgetHeight,   cardBg,     -1,         199);
    cur += 8;
 
-   long semTick = (g_LastTickTime > 0) ? (long)(TimeCurrent() - g_LastTickTime) : 0;
+   long semTick = (g_LastTickTime > 0) ? (long)(TimeTradeServer() - g_LastTickTime) : 0;
    bool mercadoAberto = false;
    datetime proxTransicao = 0;
    bool sessaoOk = ObterStatusSessaoMercado(mercadoAberto, proxTransicao);
@@ -2799,25 +2799,27 @@ void DesenharWidgetStatus() {
    bool alertaSemTick = (mercadoAberto && g_LastTickTime > 0 && semTick >= 30);
 
    color statusClr = alertaSemTick ? C'210,68,68' : C'46,204,113';
-   string statusTxt = alertaSemTick ? "EA SEM TICKS" : "EA ONLINE";
+   string statusTxt = alertaSemTick ? "SEM TICKS" : "EA ONLINE";
 
-   PRect("st_dot", lx, cur+3, 6, 6, statusClr, -1, 250);
-   PLabel("st_online", lx+12, cur, statusTxt, statusClr, 8, true);
+   PRect("st_dot", lx, cur+3, 5, 5, statusClr, -1, 250);
+   PLabel("st_online", lx+10, cur, statusTxt, statusClr, 8, true);
 
    string tickAgeTxt = "tick " + IntegerToString(semTick) + "s";
+   if(semTick >= 86400) tickAgeTxt = "tick >1d";
+   else if(semTick >= 3600) tickAgeTxt = "tick >1h";
    color tickAgeClr = alertaSemTick ? C'210,68,68' : CLR_TXT_LABEL;
    PLabelR("st_tickage", rx, cur, tickAgeTxt, tickAgeClr, 8, false);
-   cur += 18;
+   cur += 15;
 
    if(!sessaoOk) {
-      PRow("st_sessao", lx, rx, cur, "SESSAO:", "INDISPONIVEL", CLR_TXT_DIM); cur += 14;
-      PRow("st_transicao", lx, rx, cur, "", "", CLR_TXT_DIM); cur += 14;
+      PRow("st_sessao", lx, rx, cur, "MERCADO:", "INDISPONIVEL", CLR_TXT_DIM); cur += 12;
+      PRow("st_transicao", lx, rx, cur, "", "", CLR_TXT_DIM); cur += 12;
    } else if(mercadoAberto) {
-      PRow("st_sessao", lx, rx, cur, "MERCADO:", "ABERTO", C'46,204,113'); cur += 14;
-      PRow("st_transicao", lx, rx, cur, "FECHA EM:", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
+      PRow("st_sessao", lx, rx, cur, "MERCADO:", "ABERTO", C'46,204,113'); cur += 12;
+      PRow("st_transicao", lx, rx, cur, "FECHA EM:", FormatDuracao((long)(proxTransicao-TimeTradeServer())), CLR_AMBER); cur += 12;
    } else {
-      PRow("st_sessao", lx, rx, cur, "MERCADO:", "FECHADO", C'210,68,68'); cur += 14;
-      PRow("st_transicao", lx, rx, cur, "ABRE EM:", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
+      PRow("st_sessao", lx, rx, cur, "MERCADO:", "FECHADO", C'210,68,68'); cur += 12;
+      PRow("st_transicao", lx, rx, cur, "ABRE EM:", FormatDuracao((long)(proxTransicao-TimeTradeServer())), CLR_AMBER); cur += 12;
    }
 
    g_StatusWidgetHeight = cur - topo + 4;
