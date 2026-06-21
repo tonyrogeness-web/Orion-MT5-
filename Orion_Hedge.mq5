@@ -254,6 +254,7 @@ bool     g_SellSaidaZeroAtiva = false;
 // === WIDGET DE STATUS (CANTO SUPERIOR DIREITO) ===
 datetime g_LastTickTime       = 0;
 int      g_AnaliseLegendHeight = 0;
+int      g_StatusWidgetHeight  = 58;
 
 // === MINI PAINEL S.O.S (CALCULO DE RESGATE) ===
 bool     g_SOSPanelBuyAberto   = false;
@@ -2715,42 +2716,6 @@ void LimparPainelSOS(string pfx) {
 }
 
 //===================================================================
-// HELPERS DE DESENHO ANCORADOS NO CANTO SUPERIOR DIREITO (WIDGET DE STATUS)
-//===================================================================
-void PRectTR(string nm,int x,int y,int w,int h,color bg,long brd=-1,int z=200){
-   string n=PANEL_PREFIX+nm;
-   if(ObjectFind(0,n)<0)ObjectCreate(0,n,OBJ_RECTANGLE_LABEL,0,0,0);
-   ObjectSetInteger(0,n,OBJPROP_XDISTANCE,x);ObjectSetInteger(0,n,OBJPROP_YDISTANCE,y);
-   ObjectSetInteger(0,n,OBJPROP_XSIZE,w);ObjectSetInteger(0,n,OBJPROP_YSIZE,h);
-   ObjectSetInteger(0,n,OBJPROP_BGCOLOR,bg);ObjectSetInteger(0,n,OBJPROP_BORDER_TYPE,BORDER_FLAT);
-   ObjectSetInteger(0,n,OBJPROP_COLOR,brd>=0?(color)brd:bg);ObjectSetInteger(0,n,OBJPROP_WIDTH,brd>=0?1:0);
-   ObjectSetInteger(0,n,OBJPROP_CORNER,CORNER_RIGHT_UPPER);ObjectSetInteger(0,n,OBJPROP_BACK,false);
-   ObjectSetInteger(0,n,OBJPROP_SELECTABLE,false);ObjectSetInteger(0,n,OBJPROP_HIDDEN,true);ObjectSetInteger(0,n,OBJPROP_ZORDER,z);
-}
-void PLabelTR(string nm,int x,int y,string txt,color clr,int sz=9,bool bold=false){
-   string n=PANEL_PREFIX+nm;
-   if(ObjectFind(0,n)<0)ObjectCreate(0,n,OBJ_LABEL,0,0,0);
-   ObjectSetInteger(0,n,OBJPROP_XDISTANCE,x);ObjectSetInteger(0,n,OBJPROP_YDISTANCE,y);
-   ObjectSetString(0,n,OBJPROP_TEXT,txt);ObjectSetInteger(0,n,OBJPROP_COLOR,clr);
-   ObjectSetString(0,n,OBJPROP_FONT,bold?"Consolas Bold":"Consolas");ObjectSetInteger(0,n,OBJPROP_FONTSIZE,sz);
-   ObjectSetInteger(0,n,OBJPROP_CORNER,CORNER_RIGHT_UPPER);ObjectSetInteger(0,n,OBJPROP_ANCHOR,ANCHOR_LEFT_UPPER);
-   ObjectSetInteger(0,n,OBJPROP_BACK,false);ObjectSetInteger(0,n,OBJPROP_SELECTABLE,false);
-   ObjectSetInteger(0,n,OBJPROP_HIDDEN,true);ObjectSetInteger(0,n,OBJPROP_ZORDER,250);
-}
-void PLabelRTR(string nm,int x,int y,string txt,color clr,int sz=9,bool bold=false){
-   string n=PANEL_PREFIX+nm;
-   if(ObjectFind(0,n)<0)ObjectCreate(0,n,OBJ_LABEL,0,0,0);
-   ObjectSetInteger(0,n,OBJPROP_XDISTANCE,x);ObjectSetInteger(0,n,OBJPROP_YDISTANCE,y);
-   ObjectSetString(0,n,OBJPROP_TEXT,txt);ObjectSetInteger(0,n,OBJPROP_COLOR,clr);
-   ObjectSetString(0,n,OBJPROP_FONT,bold?"Consolas Bold":"Consolas");ObjectSetInteger(0,n,OBJPROP_FONTSIZE,sz);
-   ObjectSetInteger(0,n,OBJPROP_CORNER,CORNER_RIGHT_UPPER);ObjectSetInteger(0,n,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
-   ObjectSetInteger(0,n,OBJPROP_BACK,false);ObjectSetInteger(0,n,OBJPROP_SELECTABLE,false);
-   ObjectSetInteger(0,n,OBJPROP_HIDDEN,true);ObjectSetInteger(0,n,OBJPROP_ZORDER,250);
-}
-void PRowTR(string id,int lx,int rx,int y,string lbl,string val,color cv){
-   PLabelTR(id+"_l",lx,y,lbl,CLR_TXT_LABEL,9);
-   PLabelRTR(id+"_v",rx,y,val,cv,9);
-}
 
 //===================================================================
 // STATUS DE SESSAO DE MERCADO (usa as sessoes reais configuradas pelo broker)
@@ -2809,21 +2774,21 @@ string FormatDuracao(long segundos) {
 // WIDGET DE STATUS (CANTO SUPERIOR DIREITO): conexao + sessao de mercado
 //===================================================================
 void DesenharWidgetStatus() {
+   int chartW = (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS, 0);
+   int w = 210, pad = 10;
+   int margemDireita = 75; // espaco para nao invadir a escala de precos do grafico
+   int x = chartW - w - margemDireita;
+   if(x < 0) x = 0;
    int topo = 20 + g_AnaliseLegendHeight;
-   int w = 210, h = 60, pad = 10;
-   int xRight = 10;
-   int xLeft  = xRight + w;
-   int lx = xLeft - pad;
-   int rx = xRight + pad;
+   int lx = x + pad;
+   int rx = x + w - pad;
    int cur = topo;
 
-   // Cores cinza escuro para o card e borda (Estilo Imagem 2)
-   color cardBg = C'20,25,33';      // Fundo cinza escuro do painel principal
+   color cardBg = C'20,25,33';      // Fundo cinza escuro
    color cardBorder = C'45,52,65';  // Borda cinza azulada discreta
 
-   // Desenha a borda e o fundo cinza
-   PRectTR("st_border", xRight-1, cur-1, w+2, h+2, cardBorder, cardBorder, 198);
-   PRectTR("st_bg",      xRight,   cur,   w,   h,   cardBg,     -1,         199);
+   PRect("st_border", x-1, cur-1, w+2, g_StatusWidgetHeight+2, cardBorder, cardBorder, 198);
+   PRect("st_bg",      x,   cur,   w,   g_StatusWidgetHeight,   cardBg,     -1,         199);
    cur += 8;
 
    long semTick = (g_LastTickTime > 0) ? (long)(TimeCurrent() - g_LastTickTime) : 0;
@@ -2833,35 +2798,31 @@ void DesenharWidgetStatus() {
 
    bool alertaSemTick = (mercadoAberto && g_LastTickTime > 0 && semTick >= 30);
 
-   // Status de conexão e bolinha indicadora
-   color dotClr   = alertaSemTick ? C'210,68,68' : C'46,204,113'; // Vermelho vs Verde
-   string statusTxt = alertaSemTick ? "EA SEM TICKS" : "EA ONLINE";
    color statusClr = alertaSemTick ? C'210,68,68' : C'46,204,113';
+   string statusTxt = alertaSemTick ? "EA SEM TICKS" : "EA ONLINE";
 
-   // Bolinha de status
-   PRectTR("st_dot", xLeft-pad-6, cur+3, 6, 6, dotClr, -1, 250);
-   PLabelTR("st_online", lx-12, cur, statusTxt, statusClr, 8, true);
+   PRect("st_dot", lx, cur+3, 6, 6, statusClr, -1, 250);
+   PLabel("st_online", lx+12, cur, statusTxt, statusClr, 8, true);
 
-   // Idade do Tick à direita
    string tickAgeTxt = "tick " + IntegerToString(semTick) + "s";
    color tickAgeClr = alertaSemTick ? C'210,68,68' : CLR_TXT_LABEL;
-   PLabelRTR("st_tickage", rx, cur, tickAgeTxt, tickAgeClr, 8, false);
+   PLabelR("st_tickage", rx, cur, tickAgeTxt, tickAgeClr, 8, false);
    cur += 18;
 
    if(!sessaoOk) {
-      PRowTR("st_sessao", lx, rx, cur, "SESSAO:", "INDISPONIVEL", CLR_TXT_DIM); cur += 14;
-      PRowTR("st_transicao", lx, rx, cur, "", "", CLR_TXT_DIM); cur += 14;
+      PRow("st_sessao", lx, rx, cur, "SESSAO:", "INDISPONIVEL", CLR_TXT_DIM); cur += 14;
+      PRow("st_transicao", lx, rx, cur, "", "", CLR_TXT_DIM); cur += 14;
    } else if(mercadoAberto) {
-      PRowTR("st_sessao", lx, rx, cur, "MERCADO", "ABERTO", C'46,204,113'); cur += 14;
-      PRowTR("st_transicao", lx, rx, cur, "FECHA EM", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
+      PRow("st_sessao", lx, rx, cur, "MERCADO:", "ABERTO", C'46,204,113'); cur += 14;
+      PRow("st_transicao", lx, rx, cur, "FECHA EM:", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
    } else {
-      PRowTR("st_sessao", lx, rx, cur, "MERCADO", "FECHADO", C'210,68,68'); cur += 14;
-      PRowTR("st_transicao", lx, rx, cur, "ABRE EM", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
+      PRow("st_sessao", lx, rx, cur, "MERCADO:", "FECHADO", C'210,68,68'); cur += 14;
+      PRow("st_transicao", lx, rx, cur, "ABRE EM:", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
    }
 
-   int alturaFinal = cur - topo + 4;
-   ObjectSetInteger(0, PANEL_PREFIX+"st_border", OBJPROP_YSIZE, alturaFinal+2);
-   ObjectSetInteger(0, PANEL_PREFIX+"st_bg",     OBJPROP_YSIZE, alturaFinal);
+   g_StatusWidgetHeight = cur - topo + 4;
+   ObjectSetInteger(0, PANEL_PREFIX+"st_border", OBJPROP_YSIZE, g_StatusWidgetHeight+2);
+   ObjectSetInteger(0, PANEL_PREFIX+"st_bg",     OBJPROP_YSIZE, g_StatusWidgetHeight);
 }
 
 //===================================================================
