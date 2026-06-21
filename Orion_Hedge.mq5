@@ -2771,8 +2771,8 @@ bool ObterStatusSessaoMercado(bool &aberto, datetime &proximaTransicao) {
          if(!SymbolInfoSessionTrade(_Symbol, diaSemana, i, from, to)) break;
          long fromSec = (long)(from - D'1970.01.01 00:00:00');
          long toSec   = (long)(to   - D'1970.01.01 00:00:00');
-         datetime sessFrom = diaBase + fromSec;
-         datetime sessTo   = diaBase + toSec;
+         datetime sessFrom = (datetime)(diaBase + fromSec);
+         datetime sessTo   = (datetime)(diaBase + toSec);
 
          if(dayOffset == 0 && agora >= sessFrom && agora < sessTo) {
             aberto = true;
