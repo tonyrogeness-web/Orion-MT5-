@@ -3356,7 +3356,7 @@ void DesenharPainel() {
     cur += 16;
     
     double absUsage = MathAbs(usagePct) / 100.0;
-    color usageClr = (absUsage >= 0.20) ? C'255,82,82' : (absUsage >= 0.10 ? CLR_AMBER : C'0,200,83');
+    color usageClr = (absUsage >= 0.30) ? C'255,82,82' : (absUsage >= 0.15 ? CLR_AMBER : C'0,200,83');
     PBar("pl_usage_bar", lx, cur, thm_w, 4, absUsage, C'30,38,50', usageClr);
     cur += 14;
     
@@ -3408,16 +3408,16 @@ void DesenharPainel() {
 
    // DRAWDOWN GLOBAL - barra 3 zonas pre-pintadas (verde→amarelo→vermelho)
    double dd_glb_pct = (balance>0) ? MathAbs(MathMin(0.0, global_total))/balance*100.0 : 0.0;
-   color dd_glb_clr = (dd_glb_pct>=40.0)?C'255,82,82':(dd_glb_pct>=20.0?CLR_AMBER:C'0,200,83');
+   color dd_glb_clr = (dd_glb_pct>=35.0)?C'255,82,82':(dd_glb_pct>=20.0?CLR_AMBER:C'0,200,83');
    double maxDDAllowedPct = (balance > 0) ? (g_SoftStopAtual / balance * 100.0) : 0.0;
    string sLabelGlbDD = "DRAWDOWN GLOBAL (" + DoubleToString(maxDDAllowedPct, 0) + "%)";
    PLabel("glb_dd_l",lx,cur,sLabelGlbDD,CLR_TXT_DIM,8);
    PLabelR("glb_dd_v",rx-2,cur,DoubleToString(dd_glb_pct,2)+"%",dd_glb_clr,10,true); cur+=16;
    int gzw1 = (int)MathRound(0.40 * thm_w);
-   int gzw2 = (int)MathRound(0.40 * thm_w);
+   int gzw2 = (int)MathRound(0.30 * thm_w);
    PRect("gddbar_z1",lx,             cur,gzw1,             8,C'12,60,35', -1,204); // zona verde (0-20%)
-   PRect("gddbar_z2",lx+gzw1,        cur,gzw2,             8,C'60,42,0',  -1,204); // zona amarela (20-40%)
-   PRect("gddbar_z3",lx+gzw1+gzw2,   cur,thm_w-gzw1-gzw2,  8,C'60,14,14', -1,204); // zona vermelha (>40%)
+   PRect("gddbar_z2",lx+gzw1,        cur,gzw2,             8,C'60,42,0',  -1,204); // zona amarela (20-35%)
+   PRect("gddbar_z3",lx+gzw1+gzw2,   cur,thm_w-gzw1-gzw2,  8,C'60,14,14', -1,204); // zona vermelha (>35%)
    int gdd_fill = (int)MathRound(MathMin(1.0, dd_glb_pct / 50.0) * thm_w);
    if(gdd_fill > 1) PRect("gddbar_fill", lx, cur, gdd_fill, 8, dd_glb_clr, -1, 206);
    else             ObjectDelete(0, PANEL_PREFIX+"gddbar_fill");
@@ -3522,11 +3522,11 @@ void DesenharPainel() {
    
    // DRAWDOWN LOCAL - barra 3 zonas pre-pintadas
    double dd_pct=(balance>0)?(dd_usd/balance*100.0):0.0;
-   color dd_clr=(dd_pct>=40.0)?C'255,82,82':(dd_pct>=20.0?CLR_AMBER:C'0,200,83');
+   color dd_clr=(dd_pct>=35.0)?C'255,82,82':(dd_pct>=20.0?CLR_AMBER:C'0,200,83');
    PLabel("acc_dd_l",lx,cur,"DRAWDOWN LOCAL",CLR_TXT_DIM,8);
    PLabelR("acc_dd_v",rx-2,cur,DoubleToString(dd_pct,2)+"%",dd_clr,10,true); cur+=14;
    int lzw1 = (int)MathRound(0.40 * thm_w);
-   int lzw2 = (int)MathRound(0.40 * thm_w);
+   int lzw2 = (int)MathRound(0.30 * thm_w);
    PRect("ddbar_z1",lx,             cur,lzw1,             8,C'12,60,35', -1,204);
    PRect("ddbar_z2",lx+lzw1,        cur,lzw2,             8,C'60,42,0',  -1,204);
    PRect("ddbar_z3",lx+lzw1+lzw2,   cur,thm_w-lzw1-lzw2,  8,C'60,14,14', -1,204);
@@ -3537,13 +3537,14 @@ void DesenharPainel() {
    
    // SOFTSTOP - barra 3 zonas pre-pintadas
    double pct_ss=MathMin(1.0,(g_SoftStopAtual>0?dd_usd/g_SoftStopAtual:0));
-   color ss_clr=(pct_ss>=0.66)?C'255,82,82':(pct_ss>=0.33?CLR_AMBER:C'0,200,83');
+   color ss_clr=(pct_ss>=0.80)?C'255,82,82':(pct_ss>=0.50?CLR_AMBER:C'0,200,83');
    PLabel("lbl_ss_l",lx,cur,"LIMITE SOFTSTOP",CLR_TXT_DIM,8);
    PLabelR("lbl_ss_v",rx-2,cur,DoubleToString(g_SoftStopAtual,0)+" USC",CLR_TXT_PRIMARY,10,true); cur+=14;
-   int szw = thm_w/3;
-   PRect("thrm_z1",lx,       cur,szw,        8,C'12,60,35', -1,204);
-   PRect("thrm_z2",lx+szw,  cur,szw,        8,C'60,42,0',  -1,204);
-   PRect("thrm_z3",lx+szw*2,cur,thm_w-szw*2,8,C'60,14,14',-1,204);
+   int szw1 = (int)MathRound(0.50 * thm_w);
+   int szw2 = (int)MathRound(0.30 * thm_w);
+   PRect("thrm_z1",lx,             cur,szw1,             8,C'12,60,35', -1,204);
+   PRect("thrm_z2",lx+szw1,        cur,szw2,             8,C'60,42,0',  -1,204);
+   PRect("thrm_z3",lx+szw1+szw2,   cur,thm_w-szw1-szw2,  8,C'60,14,14', -1,204);
    int ss_fill=(int)MathRound(pct_ss*thm_w);
    if(ss_fill>1) PRect("thrm_fill",lx,cur,ss_fill,8,ss_clr,-1,206);
    else          ObjectDelete(0, PANEL_PREFIX+"thrm_fill");
