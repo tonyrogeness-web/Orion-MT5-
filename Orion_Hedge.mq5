@@ -2792,7 +2792,8 @@ bool ObterStatusSessaoMercado(bool &aberto, datetime &proximaTransicao) {
 }
 
 //===================================================================
-// FORMATAR DURACAO EM TEXTO COMPACTO (Xd Yh / Yh Zm / Zm)
+//===================================================================
+// FORMATAR DURACAO EM TEXTO COMPACTO (Xd Yh / Yh Zmin / Zmin)
 //===================================================================
 string FormatDuracao(long segundos) {
    if(segundos < 0) segundos = 0;
@@ -2800,8 +2801,8 @@ string FormatDuracao(long segundos) {
    long horas = (segundos % 86400) / 3600;
    long mins  = (segundos % 3600) / 60;
    if(dias > 0) return IntegerToString(dias) + "d " + IntegerToString(horas) + "h";
-   if(horas > 0) return IntegerToString(horas) + "h " + IntegerToString(mins) + "m";
-   return IntegerToString(mins) + "m";
+   if(horas > 0) return IntegerToString(horas) + "h " + IntegerToString(mins) + "min";
+   return IntegerToString(mins) + "min";
 }
 
 //===================================================================
@@ -2809,16 +2810,21 @@ string FormatDuracao(long segundos) {
 //===================================================================
 void DesenharWidgetStatus() {
    int topo = 20 + g_AnaliseLegendHeight;
-   int w = 200, pad = 8;
+   int w = 210, h = 60, pad = 10;
    int xRight = 10;
    int xLeft  = xRight + w;
    int lx = xLeft - pad;
    int rx = xRight + pad;
    int cur = topo;
 
-   PRectTR("st_border", xRight-1, cur-1, w+2, 56, CLR_LINE_HARD, CLR_LINE_HARD, 198);
-   PRectTR("st_bg",      xRight,   cur,   w,   54, CLR_BG_BASE,   -1,           199);
-   cur += 6;
+   // Cores cinza escuro para o card e borda (Estilo Imagem 2)
+   color cardBg = C'20,25,33';      // Fundo cinza escuro do painel principal
+   color cardBorder = C'45,52,65';  // Borda cinza azulada discreta
+
+   // Desenha a borda e o fundo cinza
+   PRectTR("st_border", xRight-1, cur-1, w+2, h+2, cardBorder, cardBorder, 198);
+   PRectTR("st_bg",      xRight,   cur,   w,   h,   cardBg,     -1,         199);
+   cur += 8;
 
    long semTick = (g_LastTickTime > 0) ? (long)(TimeCurrent() - g_LastTickTime) : 0;
    bool mercadoAberto = false;
@@ -2827,21 +2833,30 @@ void DesenharWidgetStatus() {
 
    bool alertaSemTick = (mercadoAberto && g_LastTickTime > 0 && semTick >= 30);
 
-   color dotClr   = alertaSemTick ? C'255,82,82' : C'0,200,83';
-   string statusTxt = alertaSemTick ? ("SEM TICKS HA " + IntegerToString(semTick) + "s") : "ONLINE";
+   // Status de conexão e bolinha indicadora
+   color dotClr   = alertaSemTick ? C'210,68,68' : C'46,204,113'; // Vermelho vs Verde
+   string statusTxt = alertaSemTick ? "EA SEM TICKS" : "EA ONLINE";
+   color statusClr = alertaSemTick ? C'210,68,68' : C'46,204,113';
+
+   // Bolinha de status
    PRectTR("st_dot", xLeft-pad-6, cur+3, 6, 6, dotClr, -1, 250);
-   PLabelTR("st_online", lx-10, cur, statusTxt, alertaSemTick?C'255,82,82':C'0,200,83', 8, true);
-   cur += 14;
+   PLabelTR("st_online", lx-12, cur, statusTxt, statusClr, 8, true);
+
+   // Idade do Tick à direita
+   string tickAgeTxt = "tick " + IntegerToString(semTick) + "s";
+   color tickAgeClr = alertaSemTick ? C'210,68,68' : CLR_TXT_LABEL;
+   PLabelRTR("st_tickage", rx, cur, tickAgeTxt, tickAgeClr, 8, false);
+   cur += 18;
 
    if(!sessaoOk) {
       PRowTR("st_sessao", lx, rx, cur, "SESSAO:", "INDISPONIVEL", CLR_TXT_DIM); cur += 14;
       PRowTR("st_transicao", lx, rx, cur, "", "", CLR_TXT_DIM); cur += 14;
    } else if(mercadoAberto) {
-      PRowTR("st_sessao", lx, rx, cur, "MERCADO:", "ABERTO", C'0,200,83'); cur += 14;
-      PRowTR("st_transicao", lx, rx, cur, "FECHA EM:", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
+      PRowTR("st_sessao", lx, rx, cur, "MERCADO", "ABERTO", C'46,204,113'); cur += 14;
+      PRowTR("st_transicao", lx, rx, cur, "FECHA EM", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
    } else {
-      PRowTR("st_sessao", lx, rx, cur, "MERCADO:", "FECHADO", C'255,82,82'); cur += 14;
-      PRowTR("st_transicao", lx, rx, cur, "ABRE EM:", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
+      PRowTR("st_sessao", lx, rx, cur, "MERCADO", "FECHADO", C'210,68,68'); cur += 14;
+      PRowTR("st_transicao", lx, rx, cur, "ABRE EM", FormatDuracao((long)(proxTransicao-TimeCurrent())), CLR_AMBER); cur += 14;
    }
 
    int alturaFinal = cur - topo + 4;
