@@ -4556,7 +4556,19 @@ void EnviarDadosWeb() {
    }
    double global_total = global_profit + global_swap;
    double ddPct  = (bal > 0) ? (MathAbs(MathMin(0.0, global_total)) / bal * 100.0) : 0.0;
+   
+   bool mercadoAberto = false;
+   datetime proxTransicao = 0;
+   bool sessaoOk = ObterStatusSessaoMercado(mercadoAberto, proxTransicao);
+   
    string status = g_BotPaused ? "PAUSED" : "RUNNING";
+   if(sessaoOk) {
+      long secsLeft = (long)(proxTransicao - TimeTradeServer());
+      if(secsLeft < 0) secsLeft = 0;
+      status += "|" + (mercadoAberto ? "true" : "false") + "|" + IntegerToString(secsLeft);
+   } else {
+      status += "|false|0";
+   }
 
    // Construir JSON de posicoes abertas
    string tradesJson = "";
