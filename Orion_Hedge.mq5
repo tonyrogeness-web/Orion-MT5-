@@ -3777,12 +3777,12 @@ void DesenharPainel() {
     color clrFundo = fundoBaixo ? C'255,82,82' : CLR_PURPLE;
     string sFundoLabel = fundoBaixo ? "F. RESERVA !" : "F. RESERVA";
 
-    PLabel("lbl_fundo_l", lx, cur+2, sFundoLabel, CLR_TXT_DIM, 8);
-    PButton("btn_fundo_res", lx + 72, cur, 38, 14, g_ReservaPanelAberto ? "FECHAR" : "GERIR", CLR_BG_CARD, g_ReservaPanelAberto ? CLR_AMBER : CLR_TXT_LABEL);
-    PLabelR("lbl_fundo_brl", lx + 160, cur+2, FormatBRL(fundoRes * fatBRL), CLR_TXT_DIM, 8);
-    PLabelR("lbl_fundo_usc", rx - 55, cur+1, FormatUSC(fundoRes, false) + " USC", clrFundo, 10, true);
-    PLabelR("lbl_fundo_pct", rx - 2, cur+2, sPctFundo, clrFundo, 8);
-    cur += 20;
+     PLabel("lbl_fundo_l", lx, cur+2, sFundoLabel, CLR_TXT_DIM, 8);
+     PButton("btn_fundo_res", lx + 78, cur, 25, 14, g_ReservaPanelAberto ? "X" : "VER", CLR_BG_CARD, g_ReservaPanelAberto ? CLR_AMBER : CLR_TXT_LABEL);
+     PLabelR("lbl_fundo_brl", lx + 160, cur+2, FormatBRL(fundoRes * fatBRL), CLR_TXT_DIM, 8);
+     PLabelR("lbl_fundo_usc", rx - 55, cur+1, FormatUSC(fundoRes, false) + " USC", clrFundo, 10, true);
+     PLabelR("lbl_fundo_pct", rx - 2, cur+2, sPctFundo, clrFundo, 8);
+     cur += 20;
     
     // Separador 4 (Entre Rendimentos e Risco Flutuante)
     PRect("sep_liq", lx, cur, thm_w, 1, CLR_LINE_SOFT, -1, 204); cur += 10;
@@ -5989,10 +5989,9 @@ void DesenharPainelReserva(int x, int y, int &outHeight) {
    double tetoUsc = (InpTetoFundoReservaPct > 0.0) ? (balance * InpTetoFundoReservaPct / 100.0) : 0.0;
    double fundoVal = ObterFundoReserva();
    
-   PRow8(pfx+"r_saldo", lx2, rx2, cur, "Saldo do Fundo:", DoubleToString(fundoVal, 2) + " USC", CLR_TXT_PRIMARY); cur+=14;
-   PRow8(pfx+"r_saldo_brl", lx2, rx2, cur, "Equivalente BRL:", FormatBRL(UscToBrl(fundoVal)), CLR_TXT_DIM); cur+=14;
+   PRow8(pfx+"r_saldo", lx2, rx2, cur, "Saldo do Fundo:", FormatBRL(UscToBrl(fundoVal)) + " (" + DoubleToString(fundoVal, 1) + " USC)", CLR_TXT_PRIMARY); cur+=14;
    
-   string tetoStr = (InpTetoFundoReservaPct > 0.0) ? (DoubleToString(tetoUsc, 2) + " USC (" + DoubleToString(InpTetoFundoReservaPct, 1) + "%)") : "ILIMITADO";
+   string tetoStr = (InpTetoFundoReservaPct > 0.0) ? (FormatBRL(UscToBrl(tetoUsc)) + " (" + DoubleToString(InpTetoFundoReservaPct, 1) + "%)") : "ILIMITADO";
    PRow8(pfx+"r_teto", lx2, rx2, cur, "Teto do Fundo:", tetoStr, CLR_TXT_LABEL); cur+=14;
    PRow8(pfx+"r_ret", lx2, rx2, cur, "Retenção p/ Ciclo:", DoubleToString(InpRetencaoFundoReserva, 1) + "% do Lucro", CLR_TXT_LABEL); cur+=14;
    PRow8(pfx+"r_carga_cfg", lx2, rx2, cur, "Carga Inicial Config:", DoubleToString(InpCargaInicialGlobal, 1) + "% L.Global", CLR_TXT_LABEL); cur+=14;
