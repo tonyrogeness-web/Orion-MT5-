@@ -3724,10 +3724,7 @@ void DesenharPainel() {
     PLabelR("lbl_hoje_brl", lx + 160, cur+2, FormatBRL(g_HistLucroHoje * fatBRL), CLR_TXT_DIM, 8);
     PLabelR("lbl_hoje_usc", rx - 55, cur+1, FormatUSC(g_HistLucroHoje, true) + " USC", clrHoje, 10, true);
     PLabelR("lbl_hoje_pct", rx - 2, cur+2, sPctHoje, clrHoje, 8);
-    cur += 20;
-    
-    // Separador 3
-    PRect("sep_hoje", lx, cur, thm_w, 1, CLR_LINE_SOFT, -1, 204); cur += 10;
+    cur += 16;
     
     // 5. L. GLOBAL
     double pct_hist = (balance > 0) ? (g_HistLucroGlobal / balance * 100.0) : 0.0;
@@ -3751,6 +3748,9 @@ void DesenharPainel() {
     PLabelR("lbl_liq_usc", rx - 55, cur+1, FormatUSC(lucroLiquido, true) + " USC", clrLiq, 10, true);
     PLabelR("lbl_liq_pct", rx - 2, cur+2, sPctLiq, clrLiq, 8);
     cur += 16;
+
+    // Separador 3
+    PRect("sep_hoje", lx, cur, thm_w, 1, CLR_LINE_SOFT, -1, 204); cur += 10;
 
     // 7. FUNDO RESERVA
     double fundoRes = ObterFundoReserva();
