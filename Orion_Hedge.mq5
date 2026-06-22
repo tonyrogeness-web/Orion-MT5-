@@ -278,6 +278,12 @@ datetime g_SOSForceBuyTimestamp = 0;
 bool     g_SOSForceSellAguardando = false;
 datetime g_SOSForceSellTimestamp = 0;
 
+// === MINI PAINEL FUNDO DE RESERVA ===
+bool     g_ReservaPanelAberto  = false;
+int      g_ReservaPanelHeight  = 230;
+bool     g_AirbagForceConfirmar= false;
+datetime g_AirbagForceTimestamp= 0;
+
 
 void SetBuySaidaZeroAtiva(bool val) {
    g_BuySaidaZeroAtiva = val;
@@ -364,8 +370,8 @@ double SimularNovoPM(bool isBuy, ulong ticketParaCortar, double loteParaCortar) 
    return 0.0;
 }
 
-void ProcessarSmartTrimming() {
-   if(!InpAtivarSmartTrimming) return;
+void ProcessarSmartTrimming(bool forcar=false) {
+   if(!InpAtivarSmartTrimming && !forcar) return;
 
    // 1. Calcula Drawdown e Nível de Margem
    double ddRobo = MathAbs(MathMin(0.0, (g_BuyLucro+g_BuySwap) + (g_SellLucro+g_SellSwap)));
@@ -378,7 +384,9 @@ void ProcessarSmartTrimming() {
    bool stressSobrev = (ddPercent >= InpTrimmingTriggerDD + 8.0);
    bool stressMargin = (marginLevel > 0.0 && marginLevel < InpMinMarginLevelEmergency);
 
-   if(!stressDD && !stressMargin) return;
+   if(!forcar) {
+      if(!stressDD && !stressMargin) return;
+   }
 
    // Detector de velocidade do DD (flash crash)
    static double ddAnterior = 0.0;
@@ -389,7 +397,9 @@ void ProcessarSmartTrimming() {
       double velocidade = ddPercent - ddAnterior;
       if(velocidade >= InpVelocidadeDD_Pct) {
          flashCrash = true;
-         AddLog("[SMART TRIMMING] FLASH CRASH detectado! DD subiu " + DoubleToString(velocidade, 1) + "% em " + IntegerToString((int)(agora - ddAnteriorTime)) + "s. Cooldown reduzido para 3s.");
+         if(!forcar) {
+            AddLog("[SMART TRIMMING] FLASH CRASH detectado! DD subiu " + DoubleToString(velocidade, 1) + "% em " + IntegerToString((int)(agora - ddAnteriorTime)) + "s. Cooldown reduzido para 3s.");
+         }
       }
    }
    if((agora - ddAnteriorTime) >= 60) {
@@ -400,7 +410,9 @@ void ProcessarSmartTrimming() {
    // Cooldown proporcional ao nivel de stress
    static datetime lastTrimmingTime = 0;
    int cooldownSeg = flashCrash ? 3 : (stressSobrev ? 5 : (stressMargin ? 10 : 30));
-   if(agora - lastTrimmingTime < cooldownSeg) return;
+   if(!forcar) {
+      if(agora - lastTrimmingTime < cooldownSeg) return;
+   }
 
    // 3. Determina qual cesto está em pior situação (maior prejuízo flutuante)
    bool targetIsBuy = true;
@@ -624,6 +636,8 @@ ENUM_TIMEFRAMES g_Ana_TF     = PERIOD_CURRENT;
 void LimparPainel();
 void DesenharPainel();
 void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight);
+void DesenharPainelReserva(int x, int y, int &outHeight);
+void LimparPainelReserva();
 void DesenharLinhas();
 void LimparLinhasAnalise();
 void DesenharLinhasAnalise();
@@ -3761,9 +3775,10 @@ void DesenharPainel() {
     if(minLotPainel <= 0) minLotPainel = 0.01;
     bool fundoBaixo = InpAtivarSmartTrimming && (fundoRes < minLotPainel * 0.5);
     color clrFundo = fundoBaixo ? C'255,82,82' : CLR_PURPLE;
-    string sFundoLabel = fundoBaixo ? "FUNDO RESERVA !" : "FUNDO RESERVA";
+    string sFundoLabel = fundoBaixo ? "F. RESERVA !" : "F. RESERVA";
 
     PLabel("lbl_fundo_l", lx, cur+2, sFundoLabel, CLR_TXT_DIM, 8);
+    PButton("btn_fundo_res", lx + 72, cur, 38, 14, g_ReservaPanelAberto ? "FECHAR" : "GERIR", CLR_BG_CARD, g_ReservaPanelAberto ? CLR_AMBER : CLR_TXT_LABEL);
     PLabelR("lbl_fundo_brl", lx + 160, cur+2, FormatBRL(fundoRes * fatBRL), CLR_TXT_DIM, 8);
     PLabelR("lbl_fundo_usc", rx - 55, cur+1, FormatUSC(fundoRes, false) + " USC", clrFundo, 10, true);
     PLabelR("lbl_fundo_pct", rx - 2, cur+2, sPctFundo, clrFundo, 8);
@@ -4306,6 +4321,11 @@ void DesenharPainel() {
    DesenharPainelSOS(true, sosX, py, sosHeightBuy);
    int sosYSell = py + (g_SOSPanelBuyAberto ? sosHeightBuy+10 : 0);
    DesenharPainelSOS(false, sosX, sosYSell, sosHeightSell);
+
+   //=======================================================  MINI PAINEL FUNDO RESERVA (FLUTUANTE)
+   int resHeight=0;
+   int resY = py + (g_SOSPanelBuyAberto ? sosHeightBuy+10 : 0) + (g_SOSPanelSellAberto ? sosHeightSell+10 : 0);
+   DesenharPainelReserva(sosX, resY, resHeight);
 
    //=======================================================  WIDGET DE STATUS (CANTO SUPERIOR DIREITO)
    DesenharWidgetStatus();
@@ -5933,6 +5953,99 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
 }
 
 //===================================================================
+// MINI PAINEL FUNDO DE RESERVA
+//===================================================================
+void DesenharPainelReserva(int x, int y, int &outHeight) {
+   string pfx = "res_";
+   if(!g_ReservaPanelAberto) {
+      LimparPainelReserva();
+      outHeight = 0;
+      return;
+   }
+
+   int pw2=260, pad2=10;
+   int lx2=x+pad2+4, rx2=x+pw2-pad2;
+   int cur=y;
+   int prevHeight = g_ReservaPanelHeight;
+
+   PRect(pfx+"border", x-1, cur-1, pw2+2, prevHeight+2, CLR_LINE_HARD, CLR_LINE_HARD, 198);
+   PRect(pfx+"bg",      x,   cur,   pw2,   prevHeight,   CLR_BG_BASE, -1, 199);
+
+   //=================================================== HEADER
+   PRect(pfx+"hdr_bg",  x, cur, pw2, 32, CLR_BG_HEADER, -1, 200);
+   PRect(pfx+"hdr_top", x, cur, pw2, 2, CLR_PURPLE, -1, 201); cur+=2;
+   PLabel(pfx+"hdr_title", x+pad2, cur+6, "GERIR FUNDO RESERVA", CLR_TXT_PRIMARY, 9, true);
+   
+   string statusTxt = InpAtivarSmartTrimming ? "AIRBAG ATIVADO (AUTO)" : "AIRBAG DESATIVADO";
+   color statusClr = InpAtivarSmartTrimming ? CLR_PURPLE : CLR_TXT_DIM;
+   PLabel(pfx+"hdr_status", x+pad2, cur+19, statusTxt, statusClr, 7, true);
+   PButton(pfx+"btn_x", x+pw2-22, cur+5, 18, 18, "X", CLR_BG_CARD, CLR_TXT_LABEL);
+   cur+=32+6;
+
+   //=================================================== DETALHES DO FUNDO
+   PSect(pfx+"sec_det", x, cur, pw2, "DETALHES DO FUNDO", CLR_PURPLE); cur+=16;
+   
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   double tetoUsc = (InpTetoFundoReservaPct > 0.0) ? (balance * InpTetoFundoReservaPct / 100.0) : 0.0;
+   double fundoVal = ObterFundoReserva();
+   
+   PRow8(pfx+"r_saldo", lx2, rx2, cur, "Saldo do Fundo:", DoubleToString(fundoVal, 2) + " USC", CLR_TXT_PRIMARY); cur+=14;
+   PRow8(pfx+"r_saldo_brl", lx2, rx2, cur, "Equivalente BRL:", FormatBRL(UscToBrl(fundoVal)), CLR_TXT_DIM); cur+=14;
+   
+   string tetoStr = (InpTetoFundoReservaPct > 0.0) ? (DoubleToString(tetoUsc, 2) + " USC (" + DoubleToString(InpTetoFundoReservaPct, 1) + "%)") : "ILIMITADO";
+   PRow8(pfx+"r_teto", lx2, rx2, cur, "Teto do Fundo:", tetoStr, CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_ret", lx2, rx2, cur, "Retenção p/ Ciclo:", DoubleToString(InpRetencaoFundoReserva, 1) + "% do Lucro", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_carga_cfg", lx2, rx2, cur, "Carga Inicial Config:", DoubleToString(InpCargaInicialGlobal, 1) + "% L.Global", CLR_TXT_LABEL); cur+=14;
+   
+   if(InpTetoFundoReservaPct > 0.0 && tetoUsc > 0.0) {
+      double pctFill = fundoVal / tetoUsc;
+      PBar(pfx+"bar_fundo", lx2, cur, pw2-(pad2*2)-8, 8, pctFill, CLR_LINE_SOFT, CLR_PURPLE); cur+=16;
+   } else {
+      cur+=4;
+   }
+
+   //=================================================== AÇÕES DE CONTROLE
+   PSect(pfx+"sec_act", x, cur, pw2, "AÇÕES DE CONTROLE", CLR_BLUE); cur+=16;
+   
+   int bw2 = pw2-(pad2*2)+4;
+   int halfBw = (bw2 - 4) / 2;
+   
+   PButton(pfx+"btn_add_50", x+pad2-2, cur, halfBw, 20, "INJETAR +50", CLR_BG_CARD, C'0,200,83');
+   PButton(pfx+"btn_sub_50", x+pad2-2 + halfBw + 4, cur, halfBw, 20, "RETIRAR -50", CLR_BG_CARD, C'255,82,82'); cur+=24;
+   
+   PButton(pfx+"btn_carga_init", x+pad2-2, cur, halfBw, 20, "CARGA INICIAL", CLR_BG_CARD, CLR_AMBER);
+   PButton(pfx+"btn_zerar", x+pad2-2 + halfBw + 4, cur, halfBw, 20, "ZERAR FUNDO", CLR_BG_CARD, CLR_RED); cur+=26;
+   
+   bool forceAguardando = g_AirbagForceConfirmar;
+   datetime forceTime = g_AirbagForceTimestamp;
+   if(forceAguardando && TimeCurrent() - forceTime > 3) {
+      g_AirbagForceConfirmar = false;
+      forceAguardando = false;
+   }
+   
+   if(forceAguardando) {
+      PButton(pfx+"btn_forcar_corte", x+pad2-2, cur, bw2, 24, "⚠️ CONFIRMAR AIRBAG EM 3s?", CLR_RED, CLR_TXT_PRIMARY); cur+=28;
+   } else {
+      PButton(pfx+"btn_forcar_corte", x+pad2-2, cur, bw2, 24, "FORÇAR CORTE (AIRBAG)", CLR_RED_DIM, CLR_RED); cur+=28;
+   }
+   
+   cur+=4;
+   int finalHeight = cur-y;
+   g_ReservaPanelHeight = finalHeight;
+   ObjectSetInteger(0, PANEL_PREFIX+pfx+"border", OBJPROP_YSIZE, finalHeight+2);
+   ObjectSetInteger(0, PANEL_PREFIX+pfx+"bg",     OBJPROP_YSIZE, finalHeight);
+   outHeight = finalHeight;
+}
+
+void LimparPainelReserva() {
+   string pfx = "res_";
+   for(int i=ObjectsTotal(0,0,-1)-1;i>=0;i--) {
+      string nm=ObjectName(0,i,0,-1);
+      if(StringFind(nm,PANEL_PREFIX+pfx)==0 || StringFind(nm,PANEL_PREFIX+"R_"+pfx)==0) ObjectDelete(0,nm);
+   }
+}
+
+//===================================================================
 // CLICK EVENTS
 //===================================================================
 void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp) {
@@ -5942,6 +6055,77 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
       return;
    }
    if(id==CHARTEVENT_OBJECT_CLICK) {
+      // Mini painel Fundo Reserva — fechar (X)
+      if(sp == PANEL_PREFIX + "res_btn_x") {
+         g_ReservaPanelAberto = false;
+         LimparPainelReserva();
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      
+      // Botão Fundo Reserva no painel principal — abre/fecha
+      if(sp == PANEL_PREFIX + "btn_fundo_res") {
+         g_ReservaPanelAberto = !g_ReservaPanelAberto;
+         if(!g_ReservaPanelAberto) LimparPainelReserva();
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      
+      // Mini painel Fundo Reserva — injetar +50 USC
+      if(sp == PANEL_PREFIX + "res_btn_add_50") {
+         AlterarFundoReserva(50.0);
+         AddLog("[FUNDO RESERVA] Injetado 50.00 USC manualmente. Novo Saldo: " + DoubleToString(ObterFundoReserva(), 2) + " USC");
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      
+      // Mini painel Fundo Reserva — retirar -50 USC
+      if(sp == PANEL_PREFIX + "res_btn_sub_50") {
+         double fundoVal = ObterFundoReserva();
+         double valorSub = MathMin(50.0, fundoVal);
+         AlterarFundoReserva(-valorSub);
+         AddLog("[FUNDO RESERVA] Retirado " + DoubleToString(valorSub, 2) + " USC manualmente. Novo Saldo: " + DoubleToString(ObterFundoReserva(), 2) + " USC");
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      
+      // Mini painel Fundo Reserva — carga inicial global
+      if(sp == PANEL_PREFIX + "res_btn_carga_init") {
+         DefinirFundoReserva(0.0);
+         CarregarFundoInicialGlobal();
+         if(ObterFundoReserva() <= 0.0) {
+            AddLog("[FUNDO RESERVA] Nenhuma carga inicial aplicada (lucro global acumulado <= 0 ou InpCargaInicialGlobal <= 0)");
+         }
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      
+      // Mini painel Fundo Reserva — zerar saldo
+      if(sp == PANEL_PREFIX + "res_btn_zerar") {
+         DefinirFundoReserva(0.0);
+         AddLog("[FUNDO RESERVA] Saldo do fundo zerado manualmente.");
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      
+      // Mini painel Fundo Reserva — forçar corte (Airbag)
+      if(sp == PANEL_PREFIX + "res_btn_forcar_corte") {
+         if(!g_AirbagForceConfirmar) {
+            g_AirbagForceConfirmar = true;
+            g_AirbagForceTimestamp = TimeCurrent();
+            AddLog("[AIRBAG] Clique novamente em 3s para confirmar a REDUÇÃO MANUAL DE LOTE!");
+         } else if(TimeCurrent() - g_AirbagForceTimestamp <= 3) {
+            g_AirbagForceConfirmar = false;
+            AddLog("[AIRBAG] Executando redução manual forçada...");
+            ProcessarSmartTrimming(true);
+         } else {
+            g_AirbagForceConfirmar = false;
+            AddLog("[AIRBAG] Confirmação expirou. Redução cancelada.");
+         }
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+
       // Botão S.O.S na grade — abre/fecha o mini painel de cálculo
       if(sp == PANEL_PREFIX + "btn_buy_sos") {
          AbrirFecharPainelSOS(true);
