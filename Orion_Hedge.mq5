@@ -313,6 +313,32 @@ void AlterarFundoReserva(double delta) {
    DefinirFundoReserva(val + delta);
 }
 
+int ObterCortesCount() {
+   string varName = "OrionHedge_CorteCount_" + _Symbol;
+   if(GlobalVariableCheck(varName)) {
+      return (int)GlobalVariableGet(varName);
+   }
+   return 0;
+}
+
+void DefinirCortesCount(int val) {
+   string varName = "OrionHedge_CorteCount_" + _Symbol;
+   GlobalVariableSet(varName, val);
+}
+
+double ObterCortesGasto() {
+   string varName = "OrionHedge_CorteGasto_" + _Symbol;
+   if(GlobalVariableCheck(varName)) {
+      return GlobalVariableGet(varName);
+   }
+   return 0.0;
+}
+
+void DefinirCortesGasto(double val) {
+   string varName = "OrionHedge_CorteGasto_" + _Symbol;
+   GlobalVariableSet(varName, val);
+}
+
 void RegistrarLucroCiclo(double lucro) {
    if(InpAtivarSmartTrimming && lucro > 0.0 && InpRetencaoFundoReserva > 0.0) {
       double balance = AccountInfoDouble(ACCOUNT_BALANCE);
@@ -532,6 +558,9 @@ void ProcessarSmartTrimming(bool forcar=false) {
       if(rc == TRADE_RETCODE_DONE || rc == TRADE_RETCODE_PLACED) {
          // Desconta o custo real do Fundo de Reserva Virtual
          AlterarFundoReserva(-realLoss);
+         // Atualiza estatísticas do Airbag
+         DefinirCortesCount(ObterCortesCount() + 1);
+         DefinirCortesGasto(ObterCortesGasto() + realLoss);
          lastTrimmingTime = TimeCurrent();
          AddLog("[SMART TRIMMING] Corte realizado com sucesso. Novo Saldo Fundo: " + DoubleToString(ObterFundoReserva(), 2) + " USC");
       }
@@ -5996,6 +6025,11 @@ void DesenharPainelReserva(int x, int y, int &outHeight) {
    PRow8(pfx+"r_ret", lx2, rx2, cur, "Retenção p/ Ciclo:", DoubleToString(InpRetencaoFundoReserva, 1) + "% do Lucro", CLR_TXT_LABEL); cur+=14;
    PRow8(pfx+"r_carga_cfg", lx2, rx2, cur, "Carga Inicial Config:", DoubleToString(InpCargaInicialGlobal, 1) + "% L.Global", CLR_TXT_LABEL); cur+=14;
    
+   int cortes = ObterCortesCount();
+   double gasto = ObterCortesGasto();
+   PRow8(pfx+"r_cortes_qtd", lx2, rx2, cur, "Defesas / Cortes:", IntegerToString(cortes) + " vezes", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_cortes_gasto", lx2, rx2, cur, "Total Queimado:", FormatBRL(UscToBrl(gasto)) + " (" + DoubleToString(gasto, 1) + " USC)", CLR_TXT_LABEL); cur+=14;
+   
    if(InpTetoFundoReservaPct > 0.0 && tetoUsc > 0.0) {
       double pctFill = fundoVal / tetoUsc;
       PBar(pfx+"bar_fundo", lx2, cur, pw2-(pad2*2)-8, 8, pctFill, CLR_LINE_SOFT, CLR_PURPLE); cur+=16;
@@ -6102,7 +6136,9 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
       // Mini painel Fundo Reserva — zerar saldo
       if(sp == PANEL_PREFIX + "res_btn_zerar") {
          DefinirFundoReserva(0.0);
-         AddLog("[FUNDO RESERVA] Saldo do fundo zerado manualmente.");
+         DefinirCortesCount(0);
+         DefinirCortesGasto(0.0);
+         AddLog("[FUNDO RESERVA] Saldo do fundo e estatísticas de corte zerados manualmente.");
          DesenharPainel(); ChartRedraw(0);
          return;
       }
