@@ -152,6 +152,9 @@ input double           InpMaxPMDriftPips          = 50.0;       // Distância M�
 input double           InpRetencaoFundoReserva    = 10.0;       // % de lucro retido de ciclos normais para o fundo
 input double           InpMaxCortePorCiclo        = 0.50;       // Fator máximo de queima do lucro por tentativa
 input double           InpMinMarginLevelEmergency = 150.0;      // Nivel minimo de margem livre para corte de emergencia (%)
+input double           InpCargaInicialGlobal      = 3.0;        // % do L.Global usado como carga inicial do fundo no OnInit
+input double           InpTetoFundoReservaPct     = 2.0;        // Teto máximo do fundo (% do saldo). 0 = sem teto
+input double           InpVelocidadeDD_Pct        = 8.0;        // DD cresceu X% em 60s = flash crash (cooldown cai p/ 3s)
 
 input group "=== INTEGRACAO WEB ORION HEDGE ==="
 input bool   InpWebAtiva            = true;      // Ativar envio de dados para o Dashboard Web
@@ -306,10 +309,29 @@ void AlterarFundoReserva(double delta) {
 
 void RegistrarLucroCiclo(double lucro) {
    if(InpAtivarSmartTrimming && lucro > 0.0 && InpRetencaoFundoReserva > 0.0) {
+      double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+      double tetoUsc = (InpTetoFundoReservaPct > 0.0) ? (balance * InpTetoFundoReservaPct / 100.0) : DBL_MAX;
+      double fundoAtual = ObterFundoReserva();
+      if(fundoAtual >= tetoUsc) return;
       double valorRetido = lucro * (InpRetencaoFundoReserva / 100.0);
+      valorRetido = MathMin(valorRetido, tetoUsc - fundoAtual);
       AlterarFundoReserva(valorRetido);
       AddLog("[SMART TRIMMING] Retido " + DoubleToString(valorRetido, 2) + " USC para o Fundo de Reserva. Novo Saldo: " + DoubleToString(ObterFundoReserva(), 2) + " USC");
    }
+}
+
+void CarregarFundoInicialGlobal() {
+   if(!InpAtivarSmartTrimming || InpCargaInicialGlobal <= 0.0) return;
+   double fundoAtual = ObterFundoReserva();
+   if(fundoAtual > 0.0) return;
+   AtualizarHistoricoGlobal();
+   if(g_HistLucroGlobal <= 0.0) return;
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   double tetoUsc = (InpTetoFundoReservaPct > 0.0) ? (balance * InpTetoFundoReservaPct / 100.0) : DBL_MAX;
+   double carga = g_HistLucroGlobal * (InpCargaInicialGlobal / 100.0);
+   carga = MathMin(carga, tetoUsc);
+   DefinirFundoReserva(carga);
+   AddLog("[SMART TRIMMING] Carga inicial do fundo: " + DoubleToString(carga, 2) + " USC (" + DoubleToString(InpCargaInicialGlobal, 1) + "% do L.Global=" + DoubleToString(g_HistLucroGlobal, 2) + " USC)");
 }
 
 double SimularNovoPM(bool isBuy, ulong ticketParaCortar, double loteParaCortar) {
@@ -358,10 +380,27 @@ void ProcessarSmartTrimming() {
 
    if(!stressDD && !stressMargin) return;
 
-   // Evita executar cortes múltiplos — cooldown proporcional ao nivel de stress
+   // Detector de velocidade do DD (flash crash)
+   static double ddAnterior = 0.0;
+   static datetime ddAnteriorTime = 0;
+   bool flashCrash = false;
+   datetime agora = TimeCurrent();
+   if(ddAnteriorTime > 0 && (agora - ddAnteriorTime) <= 60) {
+      double velocidade = ddPercent - ddAnterior;
+      if(velocidade >= InpVelocidadeDD_Pct) {
+         flashCrash = true;
+         AddLog("[SMART TRIMMING] FLASH CRASH detectado! DD subiu " + DoubleToString(velocidade, 1) + "% em " + IntegerToString((int)(agora - ddAnteriorTime)) + "s. Cooldown reduzido para 3s.");
+      }
+   }
+   if((agora - ddAnteriorTime) >= 60) {
+      ddAnterior = ddPercent;
+      ddAnteriorTime = agora;
+   }
+
+   // Cooldown proporcional ao nivel de stress
    static datetime lastTrimmingTime = 0;
-   int cooldownSeg = stressSobrev ? 5 : (stressMargin ? 10 : 30);
-   if(TimeCurrent() - lastTrimmingTime < cooldownSeg) return;
+   int cooldownSeg = flashCrash ? 3 : (stressSobrev ? 5 : (stressMargin ? 10 : 30));
+   if(agora - lastTrimmingTime < cooldownSeg) return;
 
    // 3. Determina qual cesto está em pior situação (maior prejuízo flutuante)
    bool targetIsBuy = true;
@@ -1993,6 +2032,8 @@ int OnInit() {
       g_BuySaidaZeroAtiva = (GlobalVariableGet("OrionHedge_SOS_BuyAtiva_" + _Symbol) > 0.5);
    if(GlobalVariableCheck("OrionHedge_SOS_SellAtiva_" + _Symbol))
       g_SellSaidaZeroAtiva = (GlobalVariableGet("OrionHedge_SOS_SellAtiva_" + _Symbol) > 0.5);
+   
+   CarregarFundoInicialGlobal();
    LimparPainel();  // [v3.25] Vassoura completa on init — remove fantasmas de sessoes anteriores
    EventSetTimer(1);
    AddLog("ORION v3.40 OK! Par: "+_Symbol+" | MagicBuy="+IntegerToString(g_MagicBuy));
