@@ -3698,8 +3698,8 @@ void DesenharPainel() {
     PBar("pl_usage_bar", lx, cur, thm_w, 4, absUsage, C'30,38,50', usageClr);
     cur += 14;
 
-    // Separador 1
-    PRect("sep_sal", lx, cur, thm_w, 1, CLR_LINE_SOFT, -1, 204); cur += 10;
+    // Separador 1 removido para agrupar Saldo, PL e Patrimonio
+    cur += 6;
     
     // 2. PATRIMÔNIO (Saldo Líquido)
     double pct_total = (balance > 0) ? ((equity - balance) / balance * 100.0) : 0.0;
