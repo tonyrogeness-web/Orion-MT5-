@@ -352,14 +352,16 @@ void ProcessarSmartTrimming() {
    double marginLevel = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
 
    // 2. Verifica se está em estado de estresse
-   bool stressDD = (ddPercent >= InpTrimmingTriggerDD);
+   bool stressDD     = (ddPercent >= InpTrimmingTriggerDD);
+   bool stressSobrev = (ddPercent >= InpTrimmingTriggerDD + 8.0);
    bool stressMargin = (marginLevel > 0.0 && marginLevel < InpMinMarginLevelEmergency);
 
    if(!stressDD && !stressMargin) return;
 
-   // Evita executar cortes múltiplos em frações de segundos
+   // Evita executar cortes múltiplos — cooldown proporcional ao nivel de stress
    static datetime lastTrimmingTime = 0;
-   if(TimeCurrent() - lastTrimmingTime < 10) return; 
+   int cooldownSeg = stressSobrev ? 5 : (stressMargin ? 10 : 30);
+   if(TimeCurrent() - lastTrimmingTime < cooldownSeg) return;
 
    // 3. Determina qual cesto está em pior situação (maior prejuízo flutuante)
    bool targetIsBuy = true;
@@ -412,18 +414,16 @@ void ProcessarSmartTrimming() {
    double maxGasto = fundoDisponivel;
    double capGasto = InpMaxCortePorCiclo * balance;
 
-   if(stressMargin) {
-      // Em emergência de margem, se o cap for muito restrito, permitimos gastar até o custoSobrevivencia
+   if(stressMargin || stressSobrev) {
       if(maxGasto < custoPorMinLot) {
-         double custoSobrevivencia = custoPorMinLot * 2.0; 
+         double custoSobrevivencia = custoPorMinLot * 2.0;
          maxGasto = MathMax(maxGasto, custoSobrevivencia);
+         AddLog("[SMART TRIMMING] Modo Sobrevivencia ativado (DD=" + DoubleToString(ddPercent,1) + "% / Margem=" + DoubleToString(marginLevel,1) + "%). Corte direto do saldo.");
       }
-      // O cap de emergência não deve reduzir maxGasto abaixo do mínimo vital (custoPorMinLot)
       if(maxGasto > capGasto) {
          maxGasto = MathMax(capGasto, custoPorMinLot);
       }
    } else {
-      // Em drawdown normal, respeitamos estritamente o cap
       if(maxGasto > capGasto) {
          maxGasto = capGasto;
       }
@@ -3649,11 +3649,16 @@ void DesenharPainel() {
     double fundoRes = ObterFundoReserva();
     double pct_fundo = (balance > 0) ? (fundoRes / balance * 100.0) : 0.0;
     string sPctFundo = "+" + DoubleToString(pct_fundo, 2) + "%";
-    
-    PLabel("lbl_fundo_l", lx, cur+2, "FUNDO RESERVA", CLR_TXT_DIM, 8);
+    double minLotPainel = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+    if(minLotPainel <= 0) minLotPainel = 0.01;
+    bool fundoBaixo = InpAtivarSmartTrimming && (fundoRes < minLotPainel * 0.5);
+    color clrFundo = fundoBaixo ? C'255,82,82' : CLR_PURPLE;
+    string sFundoLabel = fundoBaixo ? "FUNDO RESERVA !" : "FUNDO RESERVA";
+
+    PLabel("lbl_fundo_l", lx, cur+2, sFundoLabel, CLR_TXT_DIM, 8);
     PLabelR("lbl_fundo_brl", lx + 160, cur+2, FormatBRL(fundoRes * fatBRL), CLR_TXT_DIM, 8);
-    PLabelR("lbl_fundo_usc", rx - 55, cur+1, FormatUSC(fundoRes, false) + " USC", CLR_PURPLE, 10, true);
-    PLabelR("lbl_fundo_pct", rx - 2, cur+2, sPctFundo, CLR_PURPLE, 8);
+    PLabelR("lbl_fundo_usc", rx - 55, cur+1, FormatUSC(fundoRes, false) + " USC", clrFundo, 10, true);
+    PLabelR("lbl_fundo_pct", rx - 2, cur+2, sPctFundo, clrFundo, 8);
     cur += 20;
     
     // Separador 4 (Entre Rendimentos e Risco Flutuante)
