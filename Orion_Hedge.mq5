@@ -3699,6 +3699,7 @@ void DesenharPainel() {
     cur += 14;
 
     // Separador 1 removido para agrupar Saldo, PL e Patrimonio
+    ObjectDelete(0, PANEL_PREFIX + "sep_sal");
     cur += 6;
     
     // 2. PATRIMÔNIO (Saldo Líquido)
