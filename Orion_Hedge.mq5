@@ -653,7 +653,7 @@ void AtualizarCestoBuy() {
          if(lvl > maxLvl) maxLvl = lvl;
       }
    }
-   g_BuyNivelAtual = (maxLvl > 0) ? maxLvl : g_BuyTotal;
+   g_BuyNivelAtual = MathMax(maxLvl, g_BuyTotal);
    // [BUG-A3 FIX] Reset loteInicial quando cesto vazio
    if(g_BuyTotal==0) { g_BuyLoteInicial=0; }
    else if(firstLot>0) g_BuyLoteInicial = firstLot;
@@ -774,7 +774,7 @@ void AtualizarCestoSell() {
          if(lvl > maxLvl) maxLvl = lvl;
       }
    }
-   g_SellNivelAtual = (maxLvl > 0) ? maxLvl : g_SellTotal;
+   g_SellNivelAtual = MathMax(maxLvl, g_SellTotal);
    // [BUG-A3 FIX] Reset loteInicial quando cesto vazio
    if(g_SellTotal==0) { g_SellLoteInicial=0; }
    else if(firstLot>0) g_SellLoteInicial = firstLot;
@@ -1087,6 +1087,9 @@ bool IsCriticalHighImpactNews(string eventName) {
    // 4. PIB (GDP)
    if(StringFind(nameLower, "pib") >= 0 || StringFind(nameLower, "gdp") >= 0) return true;
    
+   // 4.1. Indicadores de Produção/Preços Industriais (PMI / PPI / IPP)
+   if(StringFind(nameLower, "pmi") >= 0 || StringFind(nameLower, "ppi") >= 0 || StringFind(nameLower, "ipp") >= 0) return true;
+   
    // 5. Vendas no Varejo (Retail Sales)
    if(StringFind(nameLower, "retail sales") >= 0 || StringFind(nameLower, "vendas no varejo") >= 0) return true;
    
@@ -1107,7 +1110,7 @@ bool IsNewsEventActive(bool &isFrozen, string &newsName) {
    if(!InpUseNewsFilter) return false;
 
    datetime utcNow = TimeGMT();
-   datetime from = utcNow - InpMinAfterNews * 60;
+   datetime from = utcNow - (InpMinAfterNews + 240) * 60;
    datetime to   = utcNow + InpMinBeforeNews * 60;
 
    MqlCalendarValue values[];
@@ -1172,6 +1175,10 @@ bool IsNewsEventActive(bool &isFrozen, string &newsName) {
 }
 
 void AtualizarEstadoNoticias() {
+   static datetime lastNewsUpdate = 0;
+   if(TimeCurrent() - lastNewsUpdate < 60) return; // Evita sobrecarga de consultas ao calendário no OnTick
+   lastNewsUpdate = TimeCurrent();
+   
    g_NewsActive = IsNewsEventActive(g_NewsFrozen, g_NewsName);
 }
 
@@ -1934,6 +1941,8 @@ int OnInit() {
 
    AtualizarCestoBuy();
    AtualizarCestoSell();
+   DesenharPainel();
+   ChartRedraw(0);
    return INIT_SUCCEEDED;
 }
 
@@ -2282,7 +2291,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
 void ProcessarAgendamentoSOS() {
    // Se cesto Buy tem agendamento ativo
    if(g_BuySaidaZeroAtiva) {
-      if(g_BuyNivelAtual < 2) {
+      if(g_BuyNivelAtual < 4) {
          SetBuySaidaZeroAtiva(false); // Cancela se não houver recompras
       } else {
          int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
@@ -2315,7 +2324,7 @@ void ProcessarAgendamentoSOS() {
 
    // Se cesto Sell tem agendamento ativo
    if(g_SellSaidaZeroAtiva) {
-      if(g_SellNivelAtual < 2) {
+      if(g_SellNivelAtual < 4) {
          SetSellSaidaZeroAtiva(false); // Cancela se não houver recompras
       } else {
          int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
@@ -2775,6 +2784,19 @@ string FormatDuracao(long segundos) {
 //===================================================================
 void DesenharWidgetStatus() {
    int chartW = (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS, 0);
+   if(chartW < 500) {
+      ObjectDelete(0, PANEL_PREFIX + "st_border");
+      ObjectDelete(0, PANEL_PREFIX + "st_bg");
+      ObjectDelete(0, PANEL_PREFIX + "st_dot");
+      ObjectDelete(0, PANEL_PREFIX + "st_online");
+      ObjectDelete(0, PANEL_PREFIX + "st_tickage");
+      ObjectDelete(0, PANEL_PREFIX + "R_st_tickage");
+      ObjectDelete(0, PANEL_PREFIX + "st_sessao_l");
+      ObjectDelete(0, PANEL_PREFIX + "R_st_sessao_v");
+      ObjectDelete(0, PANEL_PREFIX + "st_transicao_l");
+      ObjectDelete(0, PANEL_PREFIX + "R_st_transicao_v");
+      return;
+   }
    int w = 155, pad = 8;
    int margemDireita = 8; // alinhado bem ao canto proximo a escala de precos
    int x = chartW - w - margemDireita;
@@ -3708,7 +3730,7 @@ void DesenharPainel() {
    color buyGradeClr = isBuyLimGrd ? C'0,255,128' : (g_BuyTotal >= InpMaxOrdens-1 ? CLR_AMBER : CLR_TEAL);
    PLabel("buy_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
    PGradeBar("buy_grade",lx+46,cur,thm_w-118,10,InpMaxOrdens,g_BuyTotal,buyGradeClr,C'14,24,18');
-   if(g_BuyNivelAtual >= 2) {
+   if(g_BuyNivelAtual >= 4) {
       string buySosTxt = g_BuySaidaZeroAtiva ? "AGD" : "S.O.S";
       color buySosBg = g_BuySaidaZeroAtiva ? CLR_AMBER : C'65,18,18';
       color buySosFg = g_BuySaidaZeroAtiva ? clrBlack : CLR_RED;
@@ -3810,7 +3832,7 @@ void DesenharPainel() {
    color selGradeClr = isSelLimGrd ? CLR_RED : (g_SellTotal >= InpMaxOrdens-1 ? C'255,100,50' : C'180,60,60');
    PLabel("sel_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
    PGradeBar("sel_grade",lx+46,cur,thm_w-118,10,InpMaxOrdens,g_SellTotal,selGradeClr,C'24,14,14');
-   if(g_SellNivelAtual >= 2) {
+   if(g_SellNivelAtual >= 4) {
       string selSosTxt = g_SellSaidaZeroAtiva ? "AGD" : "S.O.S";
       color selSosBg = g_SellSaidaZeroAtiva ? CLR_AMBER : C'65,18,18';
       color selSosFg = g_SellSaidaZeroAtiva ? clrBlack : CLR_RED;
@@ -5027,26 +5049,33 @@ bool TemPosicoesLocais() {
 
 void FecharCesto(bool isBuy) {
    int targetMagic = isBuy ? g_MagicBuy : g_MagicSell;
-   ulong tickets[];
-   int total = PositionsTotal();
-   ArrayResize(tickets, total);
-   int count = 0;
    
-   for(int i = 0; i < total; i++) {
-      ulong t = PositionGetTicket(i);
-      if(t > 0) {
-         if(PositionSelectByTicket(t)) {
-            if(PositionGetInteger(POSITION_MAGIC) == targetMagic && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-               tickets[count] = t;
-               count++;
+   // Loop de retentativas para garantir o fechamento sob slippage/requotes
+   for(int retry = 0; retry < 5; retry++) {
+      ulong tickets[];
+      int total = PositionsTotal();
+      ArrayResize(tickets, total);
+      int count = 0;
+      
+      for(int i = 0; i < total; i++) {
+         ulong t = PositionGetTicket(i);
+         if(t > 0) {
+            if(PositionSelectByTicket(t)) {
+               if(PositionGetInteger(POSITION_MAGIC) == targetMagic && PositionGetString(POSITION_SYMBOL) == _Symbol) {
+                  tickets[count] = t;
+                  count++;
+               }
             }
          }
       }
-   }
-   
-   ArrayResize(tickets, count);
-   for(int i = 0; i < count; i++) {
-      trade.PositionClose(tickets[i]);
+      
+      if(count == 0) break; // Todas as posições deste cesto fechadas!
+      
+      for(int i = 0; i < count; i++) {
+         trade.PositionClose(tickets[i]);
+      }
+      
+      if(retry < 4) Sleep(200); // Aguarda 200ms para processamento do servidor
    }
    
    // [BUG-M3 FIX] Reset do tempo da barra para permitir novas recompras no mesmo candle
@@ -5283,34 +5312,28 @@ bool ObterDadosRecompraDirecao(bool isBuyRescue, int &level, ulong &ticket, doub
    if(level <= 1) return false;
 
    int magicPerdedor = isBuyRescue ? g_MagicBuy : g_MagicSell;
-   string targetComm = (isBuyRescue ? "OH_B" : "OH_S") + IntegerToString(level);
+   double precoExtremo = 0;
 
+   // Busca direta e robusta pela última recompra física (a que tem o preço mais extremo/desfavorável)
    for(int i = PositionsTotal() - 1; i >= 0; i--) {
       ulong t = PositionGetTicket(i);
       if(t > 0 && PositionSelectByTicket(t)) {
          if(PositionGetInteger(POSITION_MAGIC) == magicPerdedor && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-            if(PositionGetString(POSITION_COMMENT) == targetComm) {
+            double p = PositionGetDouble(POSITION_PRICE_OPEN);
+            bool eMaisExtremo = false;
+            
+            if(isBuyRescue) {
+               // Para Compra: a última recompra é sempre a que tem o preço de abertura mais baixo
+               if(precoExtremo == 0 || p < precoExtremo) eMaisExtremo = true;
+            } else {
+               // Para Venda: a última recompra é sempre a que tem o preço de abertura mais alto
+               if(precoExtremo == 0 || p > precoExtremo) eMaisExtremo = true;
+            }
+            
+            if(eMaisExtremo) {
+               precoExtremo = p;
                ticket = t;
                loss = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
-               break;
-            }
-         }
-      }
-   }
-
-   // Se não achar pelo comentário exato, tenta achar o ticket da última ordem aberta neste cesto
-   if(ticket == 0) {
-      datetime maxTime = 0;
-      for(int i = PositionsTotal() - 1; i >= 0; i--) {
-         ulong t = PositionGetTicket(i);
-         if(t > 0 && PositionSelectByTicket(t)) {
-            if(PositionGetInteger(POSITION_MAGIC) == magicPerdedor && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-               datetime posTime = (datetime)PositionGetInteger(POSITION_TIME);
-               if(posTime > maxTime) {
-                  maxTime = posTime;
-                  ticket = t;
-                  loss = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
-               }
             }
          }
       }
@@ -5318,6 +5341,7 @@ bool ObterDadosRecompraDirecao(bool isBuyRescue, int &level, ulong &ticket, doub
 
    if(ticket == 0) return false;
 
+   // Soma o lucro atual da cesta oposta
    for(int i = PositionsTotal() - 1; i >= 0; i--) {
       ulong t = PositionGetTicket(i);
       if(t > 0 && PositionSelectByTicket(t)) {
@@ -5499,6 +5523,8 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
    ObjectDelete(0, PANEL_PREFIX+pfx+"bar_prox_bg");
    ObjectDelete(0, PANEL_PREFIX+pfx+"bar_prox_fill");
    ObjectDelete(0, PANEL_PREFIX+pfx+"r_semcalc");
+   ObjectDelete(0, PANEL_PREFIX+pfx+"r_level_desc_l");
+   ObjectDelete(0, PANEL_PREFIX+"R_"+pfx+"r_level_desc_v");
    if(calcOk) {
       PRow8(pfx+"r_atual", lx2, rx2, cur, "Preco Atual:", DoubleToString(precoAtual,_Digits), CLR_TXT_PRIMARY); cur+=14;
       string alvoStr = pronto ? "ATINGIDO!" : DoubleToString(precoAlvo,_Digits);
@@ -5510,7 +5536,9 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
    } else {
       PLabel(pfx+"r_semcalc", lx2, cur, "Calculo indisponivel (volume/tick invalido)", CLR_TXT_DIM, 8); cur+=16;
    }
-   PRow8(pfx+"r_vol", lx2, rx2, cur, "Volume Recompra:", DoubleToString(volRecompra,3)+" L", CLR_TXT_LABEL); cur+=18;
+   PRow8(pfx+"r_vol", lx2, rx2, cur, "Volume Recompra:", DoubleToString(volRecompra,3)+" L", CLR_TXT_LABEL); cur+=14;
+   string recNumStr = IntegerToString(level) + "ª Recompra";
+   PRow8(pfx+"r_level_desc", lx2, rx2, cur, "Recompra a Fechar:", recNumStr, CLR_AMBER); cur+=18;
 
    //=================================================== BOTOES DE ACAO
    int bw2 = pw2-(pad2*2)+4;
@@ -5559,6 +5587,11 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
 // CLICK EVENTS
 //===================================================================
 void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp) {
+   if(id == CHARTEVENT_CHART_CHANGE) {
+      DesenharPainel();
+      ChartRedraw(0);
+      return;
+   }
    if(id==CHARTEVENT_OBJECT_CLICK) {
       // Botão S.O.S na grade — abre/fecha o mini painel de cálculo
       if(sp == PANEL_PREFIX + "btn_buy_sos") {
