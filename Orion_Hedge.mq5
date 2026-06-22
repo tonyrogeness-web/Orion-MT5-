@@ -5188,6 +5188,7 @@ void EnviarDadosWeb() {
    body += "\"balance\":" + DoubleToString(bal, 2) + ",";
    body += "\"equity\":" + DoubleToString(eq, 2) + ",";
    body += "\"reserveFund\":" + DoubleToString(fundoRes, 2) + ",";
+   body += "\"reserveCapPct\":" + DoubleToString(InpTetoFundoReservaPct, 2) + ",";
    body += "\"reserveCutsCount\":" + IntegerToString(ObterCortesCount()) + ",";
    body += "\"reserveCutsGasto\":" + DoubleToString(ObterCortesGasto(), 2) + ",";
    body += "\"softStopLimit\":" + DoubleToString(g_SoftStopAtual, 2) + ",";
