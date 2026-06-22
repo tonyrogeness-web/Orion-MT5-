@@ -145,6 +145,14 @@ input ENUM_TIMEFRAMES  InpTendenciaTF             = PERIOD_H1;  // Timeframe par
 input int              InpADX_Periodo             = 14;         // Periodo do ADX
 input double           InpADX_TrendThreshold      = 30.0;       // ADX acima disso = tendencia forte confirmada
 
+input group "=== SMART GRID TRIMMING (AIRBAG) ==="
+input bool             InpAtivarSmartTrimming     = true;       // Ativar Redução Automática de Lotes (Airbag)
+input double           InpTrimmingTriggerDD       = 20.0;       // Ativar corte se Drawdown Geral passar de %
+input double           InpMaxPMDriftPips          = 50.0;       // Distância Máxima (pips) que o PM pode afastar
+input double           InpRetencaoFundoReserva    = 10.0;       // % de lucro retido de ciclos normais para o fundo
+input double           InpMaxCortePorCiclo        = 0.50;       // Fator máximo de queima do lucro por tentativa
+input double           InpMinMarginLevelEmergency = 150.0;      // Nivel minimo de margem livre para corte de emergencia (%)
+
 input group "=== INTEGRACAO WEB ORION HEDGE ==="
 input bool   InpWebAtiva            = true;      // Ativar envio de dados para o Dashboard Web
 input string InpWebUrl              = "https://orion-theta-three.vercel.app/api/mt5/update"; // URL do servidor
@@ -276,6 +284,190 @@ void SetBuySaidaZeroAtiva(bool val) {
 void SetSellSaidaZeroAtiva(bool val) {
    g_SellSaidaZeroAtiva = val;
    GlobalVariableSet("OrionHedge_SOS_SellAtiva_" + _Symbol, val ? 1.0 : 0.0);
+}
+
+double ObterFundoReserva() {
+   string varName = "OrionHedge_Reserva_" + _Symbol;
+   if(GlobalVariableCheck(varName)) {
+      return GlobalVariableGet(varName);
+   }
+   return 0.0;
+}
+
+void DefinirFundoReserva(double val) {
+   string varName = "OrionHedge_Reserva_" + _Symbol;
+   GlobalVariableSet(varName, MathMax(0.0, val));
+}
+
+void AlterarFundoReserva(double delta) {
+   double val = ObterFundoReserva();
+   DefinirFundoReserva(val + delta);
+}
+
+void RegistrarLucroCiclo(double lucro) {
+   if(InpAtivarSmartTrimming && lucro > 0.0 && InpRetencaoFundoReserva > 0.0) {
+      double valorRetido = lucro * (InpRetencaoFundoReserva / 100.0);
+      AlterarFundoReserva(valorRetido);
+      AddLog("[SMART TRIMMING] Retido " + DoubleToString(valorRetido, 2) + " USC para o Fundo de Reserva. Novo Saldo: " + DoubleToString(ObterFundoReserva(), 2) + " USC");
+   }
+}
+
+double SimularNovoPM(bool isBuy, ulong ticketParaCortar, double loteParaCortar) {
+   int targetMagic = isBuy ? g_MagicBuy : g_MagicSell;
+   double somaFin = 0;
+   double volumeTotal = 0;
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
+      ulong t = PositionGetTicket(i);
+      if(!PositionSelectByTicket(t)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != targetMagic) continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+
+      double p = PositionGetDouble(POSITION_PRICE_OPEN);
+      double v = PositionGetDouble(POSITION_VOLUME);
+
+      if(t == ticketParaCortar) {
+         v -= loteParaCortar;
+      }
+
+      if(v > 0.0001) {
+         somaFin += p * v;
+         volumeTotal += v;
+      }
+   }
+
+   if(volumeTotal > 0) {
+      return somaFin / volumeTotal;
+   }
+   return 0.0;
+}
+
+void ProcessarSmartTrimming() {
+   if(!InpAtivarSmartTrimming) return;
+
+   // 1. Calcula Drawdown e Nível de Margem
+   double ddRobo = MathAbs(MathMin(0.0, (g_BuyLucro+g_BuySwap) + (g_SellLucro+g_SellSwap)));
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   double ddPercent = (balance > 0.0) ? (ddRobo / balance) * 100.0 : 0.0;
+   double marginLevel = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
+
+   // 2. Verifica se está em estado de estresse
+   bool stressDD = (ddPercent >= InpTrimmingTriggerDD);
+   bool stressMargin = (marginLevel > 0.0 && marginLevel < InpMinMarginLevelEmergency);
+
+   if(!stressDD && !stressMargin) return;
+
+   // Evita executar cortes múltiplos em frações de segundos
+   static datetime lastTrimmingTime = 0;
+   if(TimeCurrent() - lastTrimmingTime < 10) return; 
+
+   // 3. Determina qual cesto está em pior situação
+   bool isBuyLosing = (g_BuyTotal > 0 && (g_BuyLucro + g_BuySwap) < (g_SellLucro + g_SellSwap));
+   bool targetIsBuy = isBuyLosing;
+   if(g_BuyTotal == 0 && g_SellTotal > 0) targetIsBuy = false;
+   if(g_SellTotal == 0 && g_BuyTotal > 0) targetIsBuy = true;
+   if(g_BuyTotal == 0 && g_SellTotal == 0) return;
+
+   int targetMagic = targetIsBuy ? g_MagicBuy : g_MagicSell;
+
+   // 4. Encontra a pior posição desse cesto
+   ulong worstTicket = 0;
+   double worstProfit = 0;
+   double worstVol = 0;
+   double worstOpenPrice = 0;
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
+      ulong t = PositionGetTicket(i);
+      if(!PositionSelectByTicket(t)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != targetMagic) continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+
+      double p = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+      if(worstTicket == 0 || p < worstProfit) {
+         worstTicket = t;
+         worstProfit = p;
+         worstVol = PositionGetDouble(POSITION_VOLUME);
+         worstOpenPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+      }
+   }
+
+   if(worstTicket == 0 || worstProfit >= 0 || worstVol <= 0.0001) return;
+
+   // 5. Calcula o custo por lote mínimo
+   double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+   if(minLot <= 0) minLot = 0.01;
+   double custoPorMinLot = MathAbs(worstProfit) / (worstVol / minLot);
+   if(custoPorMinLot <= 0) return;
+
+   // 6. Define o orçamento máximo de queima (maxGasto)
+   double fundoDisponivel = ObterFundoReserva();
+   double maxGasto = fundoDisponivel;
+
+   if(stressMargin && maxGasto < custoPorMinLot) {
+      // Em emergência de margem crítica, permite um pequeno orçamento de sobrevivência direto do saldo da conta
+      double custoSobrevivencia = custoPorMinLot * 2.0; 
+      maxGasto = MathMax(maxGasto, custoSobrevivencia);
+   }
+
+   if(maxGasto > InpMaxCortePorCiclo * balance) {
+      maxGasto = InpMaxCortePorCiclo * balance;
+   }
+
+   if(maxGasto < custoPorMinLot) return;
+
+   // 7. Calcula volume teórico de corte
+   double fatorVolume = (maxGasto + 0.0001) / custoPorMinLot;
+   double volParaFechar = MathFloor(fatorVolume) * minLot;
+   volParaFechar = MathMin(volParaFechar, worstVol);
+
+   if(volParaFechar < minLot) return;
+
+   // 8. PM Drift Guard: Simulação e Validação
+   double PM_atual = targetIsBuy ? g_BuyPrecoMedio : g_SellPrecoMedio;
+   double price = targetIsBuy ? SymbolInfoDouble(_Symbol, SYMBOL_BID) : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double driftAtual = MathAbs(PM_atual - price);
+
+   while(volParaFechar >= minLot) {
+      double PM_simulado = SimularNovoPM(targetIsBuy, worstTicket, volParaFechar);
+      if(PM_simulado <= 0) {
+         // O cesto seria totalmente zerado. Isso é perfeitamente seguro!
+         break;
+      }
+      double driftSimulado = MathAbs(PM_simulado - price);
+      double driftChange = (driftSimulado - driftAtual) / _Point;
+
+      if(driftChange <= InpMaxPMDriftPips) {
+         // Volume seguro encontrado!
+         break;
+      }
+      // Se afasta demais, tenta reduzir uma fração menor
+      volParaFechar -= minLot;
+   }
+
+   if(volParaFechar < minLot) {
+      static datetime lastDriftLog = 0;
+      if(TimeCurrent() - lastDriftLog > 300) {
+         AddLog("[PM DRIFT GUARD] Corte abortado: reduzir a pior posição afastaria o Preço Médio em mais de " + DoubleToString(InpMaxPMDriftPips, 1) + " pips.");
+         lastDriftLog = TimeCurrent();
+      }
+      return;
+   }
+
+   // 9. Executa o fechamento parcial
+   double realLoss = MathAbs(worstProfit) * (volParaFechar / worstVol);
+   AddLog("[SMART TRIMMING] Executando corte emergencial de " + DoubleToString(volParaFechar, 3) + 
+          " lotes na pior ordem (Ticket: " + IntegerToString(worstTicket) + "). Custo estimado: " + DoubleToString(realLoss, 2) + " USC. Motivo: " + 
+          (stressMargin ? "Margem Baixa (" + DoubleToString(marginLevel,1) + "%)" : "DD Alto (" + DoubleToString(ddPercent,1) + "%)"));
+
+   if(trade.PositionClosePartial(worstTicket, volParaFechar)) {
+      uint rc = trade.ResultRetcode();
+      if(rc == TRADE_RETCODE_DONE || rc == TRADE_RETCODE_PLACED) {
+         // Desconta o custo real do Fundo de Reserva Virtual
+         AlterarFundoReserva(-realLoss);
+         lastTrimmingTime = TimeCurrent();
+         AddLog("[SMART TRIMMING] Corte realizado com sucesso. Novo Saldo Fundo: " + DoubleToString(ObterFundoReserva(), 2) + " USC");
+      }
+   }
 }
 
 // Historico
@@ -937,6 +1129,7 @@ void GerenciarTPBuy() {
       if(lucroAtual >= g_BuyTPEfetivo) {
          if(InpAtivarHedgeParcial && g_SellTotal >= InpNivelHedgeParcial && lucroAtual > 0)
             ExecutarHedgeParcial(true, lucroAtual * InpFatorLucroHedge);
+         RegistrarLucroCiclo(lucroAtual);
          FecharCesto(true);
          g_BuyZoneOrigin = 0;  // [BUG-C2 FIX] Reset zona apos fechamento por TP
          if(InpCooldownHabilitado && InpCooldownMinutos > 0)
@@ -966,6 +1159,7 @@ void GerenciarTPBuy() {
          if(lucroAtual <= (g_BuyLucroMaximo - folgaAtual) || (lucroAtual > 0 && lucroAtual <= g_BuyTPEfetivo * 0.30)) {
             if(InpAtivarHedgeParcial && g_SellTotal >= InpNivelHedgeParcial && lucroAtual > 0)
                ExecutarHedgeParcial(true, lucroAtual * InpFatorLucroHedge);
+            RegistrarLucroCiclo(lucroAtual);
             FecharCesto(true);
             g_BuyZoneOrigin = 0;  // [BUG-C2 FIX] Reset zona apos Trailing
             if(InpCooldownHabilitado && InpCooldownMinutos > 0)
@@ -990,6 +1184,7 @@ void GerenciarTPSell() {
       if(lucroAtual >= g_SellTPEfetivo) {
          if(InpAtivarHedgeParcial && g_BuyTotal >= InpNivelHedgeParcial && lucroAtual > 0)
             ExecutarHedgeParcial(false, lucroAtual * InpFatorLucroHedge);
+         RegistrarLucroCiclo(lucroAtual);
          FecharCesto(false);
          g_SellZoneOrigin = 0;  // [BUG-C2 FIX] Reset zona apos fechamento por TP
          if(InpCooldownHabilitado && InpCooldownMinutos > 0)
@@ -1019,6 +1214,7 @@ void GerenciarTPSell() {
          if(lucroAtual <= (g_SellLucroMaximo - folgaAtual) || (lucroAtual > 0 && lucroAtual <= g_SellTPEfetivo * 0.30)) {
             if(InpAtivarHedgeParcial && g_BuyTotal >= InpNivelHedgeParcial && lucroAtual > 0)
                ExecutarHedgeParcial(false, lucroAtual * InpFatorLucroHedge);
+            RegistrarLucroCiclo(lucroAtual);
             FecharCesto(false);
             g_SellZoneOrigin = 0;  // [BUG-C2 FIX] Reset zona apos Trailing
             if(InpCooldownHabilitado && InpCooldownMinutos > 0)
@@ -2409,6 +2605,8 @@ void OnTick() {
 
    if(g_BotPaused) return;
 
+   ProcessarSmartTrimming();
+
    bool ssAtivo=SoftStopAtingido();
    bool spike=AntiSpike();
    bool roll=FiltroRollover();
@@ -3420,6 +3618,17 @@ void DesenharPainel() {
     PLabelR("lbl_liq_brl", lx + 160, cur+2, FormatBRL(lucroLiquido * fatBRL), CLR_TXT_DIM, 8);
     PLabelR("lbl_liq_usc", rx - 55, cur+1, FormatUSC(lucroLiquido, true) + " USC", clrLiq, 10, true);
     PLabelR("lbl_liq_pct", rx - 2, cur+2, sPctLiq, clrLiq, 8);
+    cur += 16;
+
+    // 7. FUNDO RESERVA
+    double fundoRes = ObterFundoReserva();
+    double pct_fundo = (balance > 0) ? (fundoRes / balance * 100.0) : 0.0;
+    string sPctFundo = "+" + DoubleToString(pct_fundo, 2) + "%";
+    
+    PLabel("lbl_fundo_l", lx, cur+2, "FUNDO RESERVA", CLR_TXT_DIM, 8);
+    PLabelR("lbl_fundo_brl", lx + 160, cur+2, FormatBRL(fundoRes * fatBRL), CLR_TXT_DIM, 8);
+    PLabelR("lbl_fundo_usc", rx - 55, cur+1, FormatUSC(fundoRes, false) + " USC", CLR_PURPLE, 10, true);
+    PLabelR("lbl_fundo_pct", rx - 2, cur+2, sPctFundo, CLR_PURPLE, 8);
     cur += 20;
     
     // Separador 4 (Entre Rendimentos e Risco Flutuante)
