@@ -361,12 +361,20 @@ void ProcessarSmartTrimming() {
    static datetime lastTrimmingTime = 0;
    if(TimeCurrent() - lastTrimmingTime < 10) return; 
 
-   // 3. Determina qual cesto está em pior situação
-   bool isBuyLosing = (g_BuyTotal > 0 && (g_BuyLucro + g_BuySwap) < (g_SellLucro + g_SellSwap));
-   bool targetIsBuy = isBuyLosing;
-   if(g_BuyTotal == 0 && g_SellTotal > 0) targetIsBuy = false;
-   if(g_SellTotal == 0 && g_BuyTotal > 0) targetIsBuy = true;
-   if(g_BuyTotal == 0 && g_SellTotal == 0) return;
+   // 3. Determina qual cesto está em pior situação (maior prejuízo flutuante)
+   bool targetIsBuy = true;
+   double buyPnL = g_BuyTotal > 0 ? (g_BuyLucro + g_BuySwap) : 0.0;
+   double sellPnL = g_SellTotal > 0 ? (g_SellLucro + g_SellSwap) : 0.0;
+
+   if(g_BuyTotal > 0 && g_SellTotal > 0) {
+      targetIsBuy = (buyPnL < sellPnL);
+   } else if(g_BuyTotal > 0) {
+      targetIsBuy = true;
+   } else if(g_SellTotal > 0) {
+      targetIsBuy = false;
+   } else {
+      return;
+   }
 
    int targetMagic = targetIsBuy ? g_MagicBuy : g_MagicSell;
 
@@ -402,15 +410,23 @@ void ProcessarSmartTrimming() {
    // 6. Define o orçamento máximo de queima (maxGasto)
    double fundoDisponivel = ObterFundoReserva();
    double maxGasto = fundoDisponivel;
+   double capGasto = InpMaxCortePorCiclo * balance;
 
-   if(stressMargin && maxGasto < custoPorMinLot) {
-      // Em emergência de margem crítica, permite um pequeno orçamento de sobrevivência direto do saldo da conta
-      double custoSobrevivencia = custoPorMinLot * 2.0; 
-      maxGasto = MathMax(maxGasto, custoSobrevivencia);
-   }
-
-   if(maxGasto > InpMaxCortePorCiclo * balance) {
-      maxGasto = InpMaxCortePorCiclo * balance;
+   if(stressMargin) {
+      // Em emergência de margem, se o cap for muito restrito, permitimos gastar até o custoSobrevivencia
+      if(maxGasto < custoPorMinLot) {
+         double custoSobrevivencia = custoPorMinLot * 2.0; 
+         maxGasto = MathMax(maxGasto, custoSobrevivencia);
+      }
+      // O cap de emergência não deve reduzir maxGasto abaixo do mínimo vital (custoPorMinLot)
+      if(maxGasto > capGasto) {
+         maxGasto = MathMax(capGasto, custoPorMinLot);
+      }
+   } else {
+      // Em drawdown normal, respeitamos estritamente o cap
+      if(maxGasto > capGasto) {
+         maxGasto = capGasto;
+      }
    }
 
    if(maxGasto < custoPorMinLot) return;
@@ -426,6 +442,7 @@ void ProcessarSmartTrimming() {
    double PM_atual = targetIsBuy ? g_BuyPrecoMedio : g_SellPrecoMedio;
    double price = targetIsBuy ? SymbolInfoDouble(_Symbol, SYMBOL_BID) : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double driftAtual = MathAbs(PM_atual - price);
+   double pipSize = (_Digits == 5 || _Digits == 3) ? _Point * 10.0 : _Point;
 
    while(volParaFechar >= minLot) {
       double PM_simulado = SimularNovoPM(targetIsBuy, worstTicket, volParaFechar);
@@ -434,7 +451,7 @@ void ProcessarSmartTrimming() {
          break;
       }
       double driftSimulado = MathAbs(PM_simulado - price);
-      double driftChange = (driftSimulado - driftAtual) / _Point;
+      double driftChange = (driftSimulado - driftAtual) / pipSize;
 
       if(driftChange <= InpMaxPMDriftPips) {
          // Volume seguro encontrado!
@@ -1129,8 +1146,10 @@ void GerenciarTPBuy() {
       if(lucroAtual >= g_BuyTPEfetivo) {
          if(InpAtivarHedgeParcial && g_SellTotal >= InpNivelHedgeParcial && lucroAtual > 0)
             ExecutarHedgeParcial(true, lucroAtual * InpFatorLucroHedge);
-         RegistrarLucroCiclo(lucroAtual);
          FecharCesto(true);
+         AtualizarCestoBuy();
+         if(g_BuyTotal == 0)
+            RegistrarLucroCiclo(lucroAtual);
          g_BuyZoneOrigin = 0;  // [BUG-C2 FIX] Reset zona apos fechamento por TP
          if(InpCooldownHabilitado && InpCooldownMinutos > 0)
             g_BuyCooldownEnd = TimeCurrent() + (InpCooldownMinutos * 60);
@@ -1159,8 +1178,10 @@ void GerenciarTPBuy() {
          if(lucroAtual <= (g_BuyLucroMaximo - folgaAtual) || (lucroAtual > 0 && lucroAtual <= g_BuyTPEfetivo * 0.30)) {
             if(InpAtivarHedgeParcial && g_SellTotal >= InpNivelHedgeParcial && lucroAtual > 0)
                ExecutarHedgeParcial(true, lucroAtual * InpFatorLucroHedge);
-            RegistrarLucroCiclo(lucroAtual);
             FecharCesto(true);
+            AtualizarCestoBuy();
+            if(g_BuyTotal == 0)
+               RegistrarLucroCiclo(lucroAtual);
             g_BuyZoneOrigin = 0;  // [BUG-C2 FIX] Reset zona apos Trailing
             if(InpCooldownHabilitado && InpCooldownMinutos > 0)
                g_BuyCooldownEnd = TimeCurrent() + (InpCooldownMinutos * 60);
@@ -1184,8 +1205,10 @@ void GerenciarTPSell() {
       if(lucroAtual >= g_SellTPEfetivo) {
          if(InpAtivarHedgeParcial && g_BuyTotal >= InpNivelHedgeParcial && lucroAtual > 0)
             ExecutarHedgeParcial(false, lucroAtual * InpFatorLucroHedge);
-         RegistrarLucroCiclo(lucroAtual);
          FecharCesto(false);
+         AtualizarCestoSell();
+         if(g_SellTotal == 0)
+            RegistrarLucroCiclo(lucroAtual);
          g_SellZoneOrigin = 0;  // [BUG-C2 FIX] Reset zona apos fechamento por TP
          if(InpCooldownHabilitado && InpCooldownMinutos > 0)
             g_SellCooldownEnd = TimeCurrent() + (InpCooldownMinutos * 60);
@@ -1214,8 +1237,10 @@ void GerenciarTPSell() {
          if(lucroAtual <= (g_SellLucroMaximo - folgaAtual) || (lucroAtual > 0 && lucroAtual <= g_SellTPEfetivo * 0.30)) {
             if(InpAtivarHedgeParcial && g_BuyTotal >= InpNivelHedgeParcial && lucroAtual > 0)
                ExecutarHedgeParcial(false, lucroAtual * InpFatorLucroHedge);
-            RegistrarLucroCiclo(lucroAtual);
             FecharCesto(false);
+            AtualizarCestoSell();
+            if(g_SellTotal == 0)
+               RegistrarLucroCiclo(lucroAtual);
             g_SellZoneOrigin = 0;  // [BUG-C2 FIX] Reset zona apos Trailing
             if(InpCooldownHabilitado && InpCooldownMinutos > 0)
                g_SellCooldownEnd = TimeCurrent() + (InpCooldownMinutos * 60);
