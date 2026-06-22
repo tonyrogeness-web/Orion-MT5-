@@ -5065,11 +5065,13 @@ void EnviarDadosWeb() {
    }
 
    // Construir payload JSON completo
+   double fundoRes = ObterFundoReserva();
    string body = "{";
    body += "\"token\":\"" + InpWebApiKey + "\",";
    body += "\"account\":\"" + IntegerToString(acc) + "\",";
    body += "\"balance\":" + DoubleToString(bal, 2) + ",";
    body += "\"equity\":" + DoubleToString(eq, 2) + ",";
+   body += "\"reserveFund\":" + DoubleToString(fundoRes, 2) + ",";
    body += "\"softStopLimit\":" + DoubleToString(g_SoftStopAtual, 2) + ",";
    body += "\"loteBase\":" + DoubleToString(g_LoteBase, 3) + ",";
    body += "\"takeProfitLimit\":" + DoubleToString(g_TakeProfitAtual, 2) + ",";
