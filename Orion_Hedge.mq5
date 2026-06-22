@@ -3130,7 +3130,7 @@ void DesenharWidgetStatus() {
       ObjectDelete(0, PANEL_PREFIX + "R_st_transicao_v");
       return;
    }
-   int w = 155, pad = 8;
+   int w = 190, pad = 8;
    int margemDireita = 8; // alinhado bem ao canto proximo a escala de precos
    int x = chartW - w - margemDireita;
    if(x < 0) x = 0;
@@ -3171,8 +3171,8 @@ void DesenharWidgetStatus() {
    string proximaSessao = ObterProximaSessao(gmt);
    color mktClr = (sessoesAtivas == "FECHADO") ? C'210,68,68' : C'46,204,113';
 
-   PRow("st_sessao", lx, rx, cur, "MERCADO:", sessoesAtivas, mktClr); cur += 12;
-   PRow("st_transicao", lx, rx, cur, "PROXIMO:", proximaSessao, CLR_AMBER); cur += 12;
+   PRow8("st_sessao", lx, rx, cur, "MERCADO:", sessoesAtivas, mktClr); cur += 12;
+   PRow8("st_transicao", lx, rx, cur, "PROXIMO:", proximaSessao, CLR_AMBER); cur += 12;
 
    g_StatusWidgetHeight = cur - topo + 4;
    ObjectSetInteger(0, PANEL_PREFIX+"st_border", OBJPROP_YSIZE, g_StatusWidgetHeight+2);
