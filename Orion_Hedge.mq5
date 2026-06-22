@@ -3682,6 +3682,22 @@ void DesenharPainel() {
     PLabelR("lbl_sal_usc", rx - 55, cur+1, FormatUSC(balance) + " USC", CLR_TXT_PRIMARY, 10, true);
     cur += 20;
     
+    // 3. P&L ABERTO
+    double usagePct = (balance > 0) ? (global_total / balance * 100.0) : 0.0;
+    string sPctPl = (usagePct >= 0 ? "+" : "") + DoubleToString(usagePct, 2) + "%";
+    color clrPl = (global_total >= 0) ? C'0,200,83' : C'255,82,82';
+    
+    PLabel("lbl_pl_l", lx, cur+2, "P&L ABERTO", CLR_TXT_DIM, 8);
+    PLabelR("lbl_pl_brl", lx + 160, cur+2, FormatBRL(global_total * fatBRL), CLR_TXT_DIM, 8);
+    PLabelR("lbl_pl_usc", rx - 55, cur+1, FormatUSC(global_total, true) + " USC", clrPl, 10, true);
+    PLabelR("lbl_pl_pct", rx - 2, cur+2, sPctPl, clrPl, 8);
+    cur += 16;
+    
+    double absUsage = MathAbs(usagePct) / 100.0;
+    color usageClr = (absUsage >= 0.30) ? C'255,82,82' : (absUsage >= 0.15 ? CLR_AMBER : C'0,200,83');
+    PBar("pl_usage_bar", lx, cur, thm_w, 4, absUsage, C'30,38,50', usageClr);
+    cur += 14;
+
     // Separador 1
     PRect("sep_sal", lx, cur, thm_w, 1, CLR_LINE_SOFT, -1, 204); cur += 10;
     
@@ -3695,22 +3711,6 @@ void DesenharPainel() {
     PLabelR("lbl_eq_usc", rx - 55, cur+1, FormatUSC(equity) + " USC", clrTotal, 10, true);
     ObjectDelete(0, PANEL_PREFIX + "R_lbl_eq_pct"); // Deleta a porcentagem do patrimonio
     cur += 16;
-    
-    // 3. P&L ABERTO
-    double usagePct = (balance > 0) ? (global_total / balance * 100.0) : 0.0;
-    string sPctPl = (usagePct >= 0 ? "+" : "") + DoubleToString(usagePct, 2) + "%";
-    color clrPl = (global_total >= 0) ? C'0,200,83' : C'255,82,82';
-    
-    PLabel("lbl_pl_l", lx, cur+2, "P&L ABERTO", CLR_TXT_DIM, 8);
-    PLabelR("lbl_pl_brl", lx + 160, cur+2, FormatBRL(global_total * fatBRL), CLR_TXT_DIM, 8);
-    PLabelR("lbl_pl_usc", rx - 55, cur+1, FormatUSC(global_total, true) + " UaSC", clrPl, 10, true);
-    PLabelR("lbl_pl_pct", rx - 2, cur+2, sPctPl, clrPl, 8);
-    cur += 16;
-    
-    double absUsage = MathAbs(usagePct) / 100.0;
-    color usageClr = (absUsage >= 0.30) ? C'255,82,82' : (absUsage >= 0.15 ? CLR_AMBER : C'0,200,83');
-    PBar("pl_usage_bar", lx, cur, thm_w, 4, absUsage, C'30,38,50', usageClr);
-    cur += 14;
     
     // Separador 2
     PRect("sep_pl", lx, cur, thm_w, 1, CLR_LINE_SOFT, -1, 204); cur += 10;
