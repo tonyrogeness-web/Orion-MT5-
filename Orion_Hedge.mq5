@@ -3046,6 +3046,75 @@ string FormatDuracao(long segundos) {
 //===================================================================
 // WIDGET DE STATUS (CANTO SUPERIOR DIREITO): conexao + sessao de mercado
 //===================================================================
+string ObterSessoesAtivas(datetime gmt) {
+   MqlDateTime dt;
+   TimeToStruct(gmt, dt);
+   if(dt.day_of_week == 6) return "FECHADO";
+   if(dt.day_of_week == 5 && dt.hour >= 22) return "FECHADO";
+   if(dt.day_of_week == 0 && dt.hour < 22) return "FECHADO";
+   string active = "";
+   if(dt.hour >= 22 || dt.hour < 7) active += (active==""?"":"/")+"SYDNEY";
+   if(dt.hour >= 0 && dt.hour < 9) active += (active==""?"":"/")+"TOKYO";
+   if(dt.hour >= 8 && dt.hour < 17) active += (active==""?"":"/")+"LONDRES";
+   if(dt.hour >= 13 && dt.hour < 22) active += (active==""?"":"/")+"N.YORK";
+   if(active == "") return "FECHADO";
+   return active;
+}
+
+string ObterProximaSessao(datetime gmt) {
+   MqlDateTime dt;
+   TimeToStruct(gmt, dt);
+   int openHours[4] = {22, 0, 8, 13};
+   string names[4] = {"SYDNEY", "TOKYO", "LONDRES", "N.YORK"};
+   if(dt.day_of_week == 6) {
+      int hoursLeft = 46 - dt.hour;
+      int minsLeft = 60 - dt.min;
+      if(minsLeft == 60) { minsLeft = 0; } else { hoursLeft--; }
+      return "SYD em " + IntegerToString(hoursLeft) + "h " + IntegerToString(minsLeft) + "m";
+   }
+   if(dt.day_of_week == 5 && dt.hour >= 22) {
+      int hoursLeft = 24 - dt.hour + 24 + 22;
+      int minsLeft = 60 - dt.min;
+      if(minsLeft == 60) { minsLeft = 0; } else { hoursLeft--; }
+      return "SYD em " + IntegerToString(hoursLeft) + "h " + IntegerToString(minsLeft) + "m";
+   }
+   if(dt.day_of_week == 0 && dt.hour < 22) {
+      int hoursLeft = 21 - dt.hour;
+      int minsLeft = 60 - dt.min;
+      if(minsLeft == 60) { minsLeft = 0; } else { hoursLeft--; }
+      return "SYD em " + IntegerToString(hoursLeft) + "h " + IntegerToString(minsLeft) + "m";
+   }
+   int minDiff = 9999;
+   string nextName = "";
+   for(int i = 0; i < 4; i++) {
+      int diff = openHours[i] - dt.hour;
+      if(diff <= 0) diff += 24;
+      bool isSessOpen = false;
+      if(i == 0 && (dt.hour >= 22 || dt.hour < 7)) isSessOpen = true;
+      if(i == 1 && (dt.hour >= 0 && dt.hour < 9)) isSessOpen = true;
+      if(i == 2 && (dt.hour >= 8 && dt.hour < 17)) isSessOpen = true;
+      if(i == 3 && (dt.hour >= 13 && dt.hour < 22)) isSessOpen = true;
+      if(isSessOpen) continue;
+      int diffMins = diff * 60 - dt.min;
+      if(diffMins < minDiff) {
+         minDiff = diffMins;
+         nextName = names[i];
+      }
+   }
+   if(nextName == "") {
+      nextName = "SYDNEY";
+      minDiff = 12 * 60;
+   }
+   int hoursLeft = minDiff / 60;
+   int minsLeft = minDiff % 60;
+   string shortName = nextName;
+   if(nextName == "SYDNEY") shortName = "SYD";
+   if(nextName == "TOKYO") shortName = "TOK";
+   if(nextName == "LONDRES") shortName = "LON";
+   if(nextName == "N.YORK") shortName = "NY";
+   return shortName + " em " + IntegerToString(hoursLeft) + "h " + IntegerToString(minsLeft) + "m";
+}
+
 void DesenharWidgetStatus() {
    int chartW = (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS, 0);
    if(chartW < 500) {
@@ -3097,16 +3166,13 @@ void DesenharWidgetStatus() {
    PLabelR("st_tickage", rx, cur, tickAgeTxt, tickAgeClr, 8, false);
    cur += 15;
 
-   if(!sessaoOk) {
-      PRow("st_sessao", lx, rx, cur, "MERCADO:", "INDISPONIVEL", CLR_TXT_DIM); cur += 12;
-      PRow("st_transicao", lx, rx, cur, "", "", CLR_TXT_DIM); cur += 12;
-   } else if(mercadoAberto) {
-      PRow("st_sessao", lx, rx, cur, "MERCADO:", "ABERTO", C'46,204,113'); cur += 12;
-      PRow("st_transicao", lx, rx, cur, "FECHA EM:", FormatDuracao((long)(proxTransicao-TimeTradeServer())), CLR_AMBER); cur += 12;
-   } else {
-      PRow("st_sessao", lx, rx, cur, "MERCADO:", "FECHADO", C'210,68,68'); cur += 12;
-      PRow("st_transicao", lx, rx, cur, "ABRE EM:", FormatDuracao((long)(proxTransicao-TimeTradeServer())), CLR_AMBER); cur += 12;
-   }
+   datetime gmt = TimeGMT();
+   string sessoesAtivas = ObterSessoesAtivas(gmt);
+   string proximaSessao = ObterProximaSessao(gmt);
+   color mktClr = (sessoesAtivas == "FECHADO") ? C'210,68,68' : C'46,204,113';
+
+   PRow("st_sessao", lx, rx, cur, "MERCADO:", sessoesAtivas, mktClr); cur += 12;
+   PRow("st_transicao", lx, rx, cur, "PROXIMO:", proximaSessao, CLR_AMBER); cur += 12;
 
    g_StatusWidgetHeight = cur - topo + 4;
    ObjectSetInteger(0, PANEL_PREFIX+"st_border", OBJPROP_YSIZE, g_StatusWidgetHeight+2);
