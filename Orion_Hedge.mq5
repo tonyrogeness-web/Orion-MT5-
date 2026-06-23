@@ -155,13 +155,13 @@ input double           InpADX_TrendThreshold      = 30.0;       // ADX acima dis
 
 input group "=== SMART GRID TRIMMING (AIRBAG) ==="
 input bool             InpAtivarSmartTrimming     = true;       // Ativar Redução Automática de Lotes (Airbag)
-input double           InpTrimmingTriggerDD       = 20.0;       // Ativar corte se Drawdown Geral passar de %
-input double           InpMaxPMDriftPips          = 50.0;       // Distância Máxima (pips) que o PM pode afastar
-input double           InpRetencaoFundoReserva    = 10.0;       // % de lucro retido de ciclos normais para o fundo
+input double           InpTrimmingTriggerDD       = 15.0;       // Ativar corte se Drawdown Geral passar de %
+input double           InpMaxPMDriftPips          = 150.0;      // Distância Máxima (pips) que o PM pode afastar
+input double           InpRetencaoFundoReserva    = 20.0;       // % de lucro retido de ciclos normais para o fundo
 input double           InpMaxCortePorCiclo        = 0.50;       // Fator máximo de queima do lucro por tentativa
 input double           InpMinMarginLevelEmergency = 150.0;      // Nivel minimo de margem livre para corte de emergencia (%)
 input double           InpCargaInicialGlobal      = 3.0;        // % do L.Global usado como carga inicial do fundo no OnInit
-input double           InpTetoFundoReservaPct     = 2.0;        // Teto máximo do fundo (% do saldo). 0 = sem teto
+input double           InpTetoFundoReservaPct     = 5.0;        // Teto máximo do fundo (% do saldo). 0 = sem teto
 input double           InpVelocidadeDD_Pct        = 8.0;        // DD cresceu X% em 60s = flash crash (cooldown cai p/ 3s)
 
 input group "=== INTEGRACAO WEB ORION HEDGE ==="
