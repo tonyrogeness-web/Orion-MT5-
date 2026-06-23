@@ -305,6 +305,9 @@ double   g_SGScoreMercado      = 100.0;
 double   g_SGScoreGrade        = 100.0;
 double   g_SGScoreAdapt        = 100.0;
 
+// === MINI PAINEL DEFESA INFO ===
+bool     g_DefesaInfoAberto    = false;
+
 
 void SetBuySaidaZeroAtiva(bool val) {
    g_BuySaidaZeroAtiva = val;
@@ -682,6 +685,8 @@ void DesenharPainelReserva(int x, int y, int &outHeight);
 void LimparPainelReserva();
 void DesenharPainelSGInfo(int x, int y);
 void LimparPainelSGInfo();
+void DesenharPainelDefesaInfo(int x, int y);
+void LimparPainelDefesaInfo();
 void DesenharLinhas();
 void LimparLinhasAnalise();
 void DesenharLinhasAnalise();
@@ -4146,7 +4151,8 @@ void DesenharPainel() {
    
    // Coluna Esquerda: Seguranca
    PLabel("mkt_sos_l",lx+4,cur,"DEFESA:",CLR_TXT_LABEL,8);
-   PLabel("mkt_sos_v",lx+46,cur,sos_act?"DEFESA!":"MONITORANDO",sos_act?CLR_AMBER:C'0,200,83',8,true);
+   PButton("btn_defesa_info", lx+48, cur-1, 16, 14, g_DefesaInfoAberto ? "X" : "?", CLR_BG_CARD, g_DefesaInfoAberto ? CLR_AMBER : CLR_PURPLE);
+   PLabel("mkt_sos_v",lx+68,cur,sos_act?"DEFESA!":"MONITORANDO",sos_act?CLR_AMBER:C'0,200,83',8,true);
    
    // Coluna Direita: Lote
    PLabel("mkt_lote_l",lx+160,cur,"Lote:",CLR_TXT_LABEL,8);
@@ -4503,6 +4509,11 @@ void DesenharPainel() {
    //=======================================================  MINI PAINEL SMART GATE INFO (FLUTUANTE)
    int sgInfoY = resY + (g_ReservaPanelAberto ? resHeight+10 : 0);
    DesenharPainelSGInfo(sosX, sgInfoY);
+
+   //=======================================================  MINI PAINEL DEFESA INFO (FLUTUANTE)
+   int sgInfoHeight = g_SGInfoAberto ? 310 : 0;
+   int defesaInfoY = sgInfoY + sgInfoHeight;
+   DesenharPainelDefesaInfo(sosX, defesaInfoY);
 
    //=======================================================  WIDGET DE STATUS (CANTO SUPERIOR DIREITO)
    DesenharWidgetStatus();
@@ -6361,6 +6372,14 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
       
+      // Botão Defesa Info no painel principal — abre/fecha
+      if(sp == PANEL_PREFIX + "btn_defesa_info" || sp == PANEL_PREFIX + "def_btn_x") {
+         g_DefesaInfoAberto = !g_DefesaInfoAberto;
+         if(!g_DefesaInfoAberto) LimparPainelDefesaInfo();
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      
       // Mini painel Fundo Reserva — injetar +50 USC
       if(sp == PANEL_PREFIX + "res_btn_add_50") {
          AlterarFundoReserva(50.0);
@@ -6822,6 +6841,96 @@ void EnviarResumoPush() {
    } else {
       AddLog("Erro ao enviar Push. Codigo: " + IntegerToString(_LastError));
       Print("MQL5 SendNotification Error: ", _LastError);
+   }
+}
+
+//===================================================================
+// MINI PAINEL DEFESA INFO — FLUTUANTE
+//===================================================================
+void DesenharPainelDefesaInfo(int x, int y) {
+   string pfx = "def_";
+   if(!g_DefesaInfoAberto) {
+      LimparPainelDefesaInfo();
+      return;
+   }
+
+   int pw2 = 260, pad2 = 10;
+   int lx2 = x + pad2 + 4, rx2 = x + pw2 - pad2;
+   int cur = y;
+   int panelHeight = 280;
+
+   PRect(pfx+"border", x-1, cur-1, pw2+2, panelHeight+2, CLR_LINE_HARD, CLR_LINE_HARD, 198);
+   PRect(pfx+"bg",      x,   cur,   pw2,   panelHeight,   CLR_BG_BASE, -1, 199);
+
+   //=================================================== HEADER
+   PRect(pfx+"hdr_bg",  x, cur, pw2, 32, CLR_BG_HEADER, -1, 200);
+   PRect(pfx+"hdr_top", x, cur, pw2, 2, CLR_PURPLE, -1, 201); cur+=2;
+   PLabel(pfx+"hdr_title", x+pad2, cur+6, "SISTEMA DE DEFESA E SOS", CLR_TXT_PRIMARY, 8, true);
+   
+   bool sos_act = (InpAtivarHedgeParcial && (g_BuyTotal>=InpNivelHedgeParcial || g_SellTotal>=InpNivelHedgeParcial)) || 
+                  (InpAtivarDinBreakEven && (g_BuyTotal>=InpNivelBreakEven || g_SellTotal>=InpNivelBreakEven));
+   string statusTxt = sos_act ? "ATIVO" : "MONITORANDO";
+   color statusClr = sos_act ? CLR_AMBER : C'0,200,83';
+   PLabel(pfx+"hdr_status", x+pad2, cur+19, "Defesa: " + statusTxt, statusClr, 7, true);
+   PButton(pfx+"btn_x", x+pw2-22, cur+5, 18, 18, "X", CLR_BG_CARD, CLR_TXT_LABEL);
+   cur+=32+6;
+
+   //=================================================== HEDGE PARCIAL
+   PSect(pfx+"sec_hedge", x, cur, pw2, "HEDGE PARCIAL (ALT 1)", CLR_PURPLE); cur+=16;
+   
+   string hpStatus = InpAtivarHedgeParcial ? "Habilitado" : "Desabilitado";
+   color hpClr = InpAtivarHedgeParcial ? CLR_TXT_PRIMARY : CLR_TXT_DIM;
+   PRow8(pfx+"r_hp_status", lx2, rx2, cur, "Hedge Parcial:", hpStatus, hpClr); cur+=14;
+   
+   string buyHpStatus = (g_BuyTotal >= InpNivelHedgeParcial) ? "ATIVO (N" + IntegerToString(g_BuyTotal) + ")" : "Aguardando";
+   color buyHpClr = (g_BuyTotal >= InpNivelHedgeParcial) ? CLR_AMBER : CLR_TXT_DIM;
+   PRow8(pfx+"r_hp_buy", lx2, rx2, cur, "Cesto Buy:", buyHpStatus, buyHpClr); cur+=14;
+
+   string sellHpStatus = (g_SellTotal >= InpNivelHedgeParcial) ? "ATIVO (N" + IntegerToString(g_SellTotal) + ")" : "Aguardando";
+   color sellHpClr = (g_SellTotal >= InpNivelHedgeParcial) ? CLR_AMBER : CLR_TXT_DIM;
+   PRow8(pfx+"r_hp_sell", lx2, rx2, cur, "Cesto Sell:", sellHpStatus, sellHpClr); cur+=14;
+
+   //=================================================== BREAK EVEN
+   PSect(pfx+"sec_be", x, cur, pw2, "BREAK EVEN DINÂMICO (ALT 2)", CLR_BLUE); cur+=16;
+   
+   string beStatus = InpAtivarDinBreakEven ? "Habilitado" : "Desabilitado";
+   color beClr = InpAtivarDinBreakEven ? CLR_TXT_PRIMARY : CLR_TXT_DIM;
+   PRow8(pfx+"r_be_status", lx2, rx2, cur, "Break Even:", beStatus, beClr); cur+=14;
+
+   string buyBeStatus = g_BuySaidaZeroAtiva ? "ATIVADO" : ((g_BuyTotal >= InpNivelBreakEven) ? "Aguardando DD" : "Aguardando Nível");
+   color buyBeClr = g_BuySaidaZeroAtiva ? CLR_RED : CLR_TXT_DIM;
+   PRow8(pfx+"r_be_buy", lx2, rx2, cur, "SOS Buy (Zero a Zero):", buyBeStatus, buyBeClr); cur+=14;
+
+   string sellBeStatus = g_SellSaidaZeroAtiva ? "ATIVADO" : ((g_SellTotal >= InpNivelBreakEven) ? "Aguardando DD" : "Aguardando Nível");
+   color sellBeClr = g_SellSaidaZeroAtiva ? CLR_RED : CLR_TXT_DIM;
+   PRow8(pfx+"r_be_sell", lx2, rx2, cur, "SOS Sell (Zero a Zero):", sellBeStatus, sellBeClr); cur+=14;
+
+   //=================================================== COOLDOWN RESTANTE
+   PSect(pfx+"sec_cd", x, cur, pw2, "COOLDOWN ANTI-CHASING", CLR_TEAL); cur+=16;
+   
+   datetime now = TimeCurrent();
+   int cd_buy_sec  = (int)MathMax(0, g_BuyCooldownEnd  - now);
+   int cd_sell_sec = (int)MathMax(0, g_SellCooldownEnd - now);
+   
+   string buyCdStr = (cd_buy_sec > 0) ? IntegerToString(cd_buy_sec / 60) + "m " + IntegerToString(cd_buy_sec % 60) + "s" : "LIVRE";
+   color buyCdClr = (cd_buy_sec > 0) ? CLR_AMBER : C'0,200,83';
+   PRow8(pfx+"r_cd_buy", lx2, rx2, cur, "Cooldown Buy:", buyCdStr, buyCdClr); cur+=14;
+
+   string sellCdStr = (cd_sell_sec > 0) ? IntegerToString(cd_sell_sec / 60) + "m " + IntegerToString(cd_sell_sec % 60) + "s" : "LIVRE";
+   color sellCdClr = (cd_sell_sec > 0) ? CLR_AMBER : C'0,200,83';
+   PRow8(pfx+"r_cd_sell", lx2, rx2, cur, "Cooldown Sell:", sellCdStr, sellCdClr); cur+=14;
+
+   cur+=4;
+   panelHeight = cur - y;
+   ObjectSetInteger(0, PANEL_PREFIX+pfx+"border", OBJPROP_YSIZE, panelHeight+2);
+   ObjectSetInteger(0, PANEL_PREFIX+pfx+"bg",     OBJPROP_YSIZE, panelHeight);
+}
+
+void LimparPainelDefesaInfo() {
+   string pfx = "def_";
+   for(int i=ObjectsTotal(0,0,-1)-1;i>=0;i--) {
+      string nm=ObjectName(0,i,0,-1);
+      if(StringFind(nm,PANEL_PREFIX+pfx)==0 || StringFind(nm,PANEL_PREFIX+"R_"+pfx)==0) ObjectDelete(0,nm);
    }
 }
 
