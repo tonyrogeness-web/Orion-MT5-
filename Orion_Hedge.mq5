@@ -1375,8 +1375,21 @@ double CalcularSmartGateScore() {
 
    // === CAMADA 1: Risco de conta (score 0-100) ===
    double scoreConta = 100.0;
-   // DD penaliza linearmente ate score zero quando dd_pct = 1 / (peso * 3)
-   scoreConta -= dd_pct * 300.0;
+
+   // DD local do par (floating atual)
+   scoreConta -= dd_pct * 150.0;
+
+   // DD global da conta (balance vs equity) — enxerga perdas realizadas
+   double equity    = AccountInfoDouble(ACCOUNT_EQUITY);
+   double balanceTot= AccountInfoDouble(ACCOUNT_BALANCE);
+   double dd_global_pct = (balanceTot > 0 && equity < balanceTot)
+                          ? (balanceTot - equity) / balanceTot
+                          : 0.0;
+   scoreConta -= dd_global_pct * 150.0;
+
+   // Score mínimo também sobe com o pior entre local e global
+   double dd_pct_pior = MathMax(dd_pct, dd_global_pct);
+
    // Margem livre penaliza se abaixo de 30%
    double marginFree = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    double marginTotal = AccountInfoDouble(ACCOUNT_MARGIN);
@@ -1452,11 +1465,11 @@ double CalcularSmartGateScore() {
 
    // === ATUALIZA GLOBALS ADAPTATIVOS ===
    // Score minimo sobe com DD (mais DD = mais exigente)
-   g_SGScoreMinimo  = MathMin(99.0, InpSGScoreBase + (dd_pct * InpSGScoreFatorDD));
+   g_SGScoreMinimo  = MathMin(99.0, InpSGScoreBase + (dd_pct_pior * InpSGScoreFatorDD));
    // Multiplicador de distancia cresce com DD
-   g_SGDistMultipl  = 1.0 + (dd_pct * InpSGDistFatorDD);
+   g_SGDistMultipl  = 1.0 + (dd_pct_pior * InpSGDistFatorDD);
    // Fator de lote cai com DD (minimo 25% do lote)
-   g_SGLoteFator    = MathMax(0.25, 1.0 - (dd_pct * InpSGLoteFatorDD));
+   g_SGLoteFator    = MathMax(0.25, 1.0 - (dd_pct_pior * InpSGLoteFatorDD));
 
    bool bloqueadoAntes = g_SGBloqueado;
    g_SGScoreAtual   = MathMax(0.0, MathMin(100.0, scoreFinal));
