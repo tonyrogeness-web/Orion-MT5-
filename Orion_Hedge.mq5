@@ -44,8 +44,8 @@ input ENUM_TIMEFRAMES InpBaseTF    = PERIOD_H1;
 input ENUM_TIMEFRAMES InpTrendTF   = PERIOD_M15;
 
 input group "=== GRADE HEDGE (BALANCEADO) ==="
-input double InpLotInitial         = 0.012;  // Lote Base (Reduzido para 0.012 - maior seguranca)
-input double InpLotMultiplier      = 1.50;   // Multiplicador Recompra (Forte no sufoco)
+input double InpLotInitial         = 0.010;  // Lote Base (Reduzido para 0.010 - maior seguranca)
+input double InpLotMultiplier      = 1.35;   // Multiplicador Recompra (Forte no sufoco)
 input int    InpMaxOrdens          = 5;      // Max Niveis por cesto [Reduzido de 6 para 5 - maior conservadorismo]
 input double InpTakeProfitDinheiro = 1.50;   // Alvo por cesto (USC) (Gira rapido e poe no bolso)
 input double InpHedgeLotContraFator= 0.25;   // Fator lote cesto CONTRA tendencia [v3.31: 0.20->0.25]
@@ -55,7 +55,7 @@ input group "=== FILTROS ==="
 input int    InpMaxSpread          = 25;     // Spread Max (Pts) [v3.23: 35->25]
 input int    InpATRPeriod          = 14;
 input int    InpFR_Candles         = 24;
-input double InpDist_Base          = 1.2;    // Distancia Grade [v3.24: 1.5->1.2 mais ciclos]
+input double InpDist_Base          = 1.5;    // Distancia Grade [v3.24: 1.5->1.2 mais ciclos]
 input double InpDistStep           = 0.30;   // Incremento Distancia [v3.23: 0.25->0.30]
 input int    InpMinDistancePoints  = 400;    // [v3.29+] Piso minimo de distancia da grade em pts (200->400)
 input bool   InpOneTradePerBar     = true;   // [v3.25+] 1 Recompra por barra H1 (evita avalanche)
@@ -1771,7 +1771,7 @@ void VerificarCicloEquity() {
    double profitNet = g_HistLucroGlobal + global_total;
    double pctNet = (g_EquityCycleBaseBalance > 0) ? (profitNet / g_EquityCycleBaseBalance * 100.0) : 0.0;
    
-   // A meta percentual Ã© fixa em relaÃ§Ã£o Ã  base de referÃªncia deste ciclo
+   // A meta percentual Ã© fixa em relaÃ§Ã£o Ã  base de referÃªncia deste ciclo
    double currentTargetPct = InpMetaCicloEquityPct;
    
    g_PeakProfit = pctNet;
@@ -5188,9 +5188,9 @@ void EnviarDadosWeb() {
    body += "\"balance\":" + DoubleToString(bal, 2) + ",";
    body += "\"equity\":" + DoubleToString(eq, 2) + ",";
    body += "\"reserveFund\":" + DoubleToString(fundoRes, 2) + ",";
-   body += "\"reserveCapPct\":" + DoubleToString(InpTetoFundoReservaPct, 2) + ",";
    body += "\"reserveCutsCount\":" + IntegerToString(ObterCortesCount()) + ",";
    body += "\"reserveCutsGasto\":" + DoubleToString(ObterCortesGasto(), 2) + ",";
+   body += "\"reserveCapPct\":" + DoubleToString(InpTetoFundoReservaPct, 2) + ",";
    body += "\"softStopLimit\":" + DoubleToString(g_SoftStopAtual, 2) + ",";
    body += "\"loteBase\":" + DoubleToString(g_LoteBase, 3) + ",";
    body += "\"takeProfitLimit\":" + DoubleToString(g_TakeProfitAtual, 2) + ",";
@@ -6032,7 +6032,7 @@ void DesenharPainelReserva(int x, int y, int &outHeight) {
    double gasto = ObterCortesGasto();
    PRow8(pfx+"r_cortes_qtd", lx2, rx2, cur, "Defesas / Cortes:", IntegerToString(cortes) + " vezes", CLR_TXT_LABEL); cur+=14;
    PRow8(pfx+"r_cortes_gasto", lx2, rx2, cur, "Total Queimado:", FormatBRL(UscToBrl(gasto)) + " (" + DoubleToString(gasto, 1) + " USC)", CLR_TXT_LABEL); cur+=14;
-   
+
    if(InpTetoFundoReservaPct > 0.0 && tetoUsc > 0.0) {
       double pctFill = fundoVal / tetoUsc;
       PBar(pfx+"bar_fundo", lx2, cur, pw2-(pad2*2)-8, 8, pctFill, CLR_LINE_SOFT, CLR_PURPLE); cur+=16;
