@@ -4086,7 +4086,7 @@ void DesenharPainel() {
    double pct_sg = MathMin(1.0, g_SGScoreAtual / 100.0);
    color sg_clr  = g_SGBloqueado ? C'255,82,82' : (g_SGScoreAtual < 60.0 ? CLR_AMBER : C'0,200,83');
    PLabel("lbl_ss_l",lx,cur,"SMART GATE SCORE",CLR_TXT_DIM,8);
-   PButton("btn_sg_info", lx + 105, cur - 1, 16, 14, g_SGInfoAberto ? "X" : "?", CLR_BG_CARD, g_SGInfoAberto ? CLR_AMBER : CLR_PURPLE);
+   PButton("btn_sg_info", lx + 120, cur - 1, 16, 14, g_SGInfoAberto ? "X" : "?", CLR_BG_CARD, g_SGInfoAberto ? CLR_AMBER : CLR_PURPLE);
    PLabelR("lbl_ss_v",rx-2,cur,DoubleToString(g_SGScoreAtual,0)+" / "+DoubleToString(g_SGScoreMinimo,0)+" min",CLR_TXT_PRIMARY,10,true); cur+=14;
    int szw1 = (int)MathRound(0.50 * thm_w);
    int szw2 = (int)MathRound(0.30 * thm_w);
