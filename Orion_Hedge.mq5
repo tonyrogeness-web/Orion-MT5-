@@ -1472,8 +1472,12 @@ double CalcularSmartGateScore() {
       AddLog("[SmartGate] LIBERADO — Score: " + DoubleToString(g_SGScoreAtual,1)
            + " >= Min: " + DoubleToString(g_SGScoreMinimo,1));
 
-   g_SGUltimoCalculo = agora;
-   return g_SGScoreAtual;
+    g_SGScoreConta   = scoreConta;
+    g_SGScoreMercado = scoreMercado;
+    g_SGScoreGrade   = scoreGrade;
+    g_SGScoreAdapt   = scoreAdapt;
+    g_SGUltimoCalculo = agora;
+    return g_SGScoreAtual;
 }
 
 // Aplica fator de lote do SmartGate sobre lote calculado
@@ -4482,6 +4486,10 @@ void DesenharPainel() {
    int resHeight=0;
    int resY = py + (g_SOSPanelBuyAberto ? sosHeightBuy+10 : 0) + (g_SOSPanelSellAberto ? sosHeightSell+10 : 0);
    DesenharPainelReserva(sosX, resY, resHeight);
+
+   //=======================================================  MINI PAINEL SMART GATE INFO (FLUTUANTE)
+   int sgInfoY = resY + (g_ReservaPanelAberto ? resHeight+10 : 0);
+   DesenharPainelSGInfo(sosX, sgInfoY);
 
    //=======================================================  WIDGET DE STATUS (CANTO SUPERIOR DIREITO)
    DesenharWidgetStatus();
