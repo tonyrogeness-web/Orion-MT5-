@@ -44,8 +44,8 @@ input ENUM_TIMEFRAMES InpBaseTF    = PERIOD_H1;
 input ENUM_TIMEFRAMES InpTrendTF   = PERIOD_M15;
 
 input group "=== GRADE HEDGE (BALANCEADO) ==="
-input double InpLotInitial         = 0.010;  // Lote Base (Reduzido para 0.010 - maior seguranca)
-input double InpLotMultiplier      = 1.35;   // Multiplicador Recompra (Forte no sufoco)
+input double InpLotInitial         = 0.012;  // Lote Base (Reduzido para 0.012 - maior seguranca)
+input double InpLotMultiplier      = 1.50;   // Multiplicador Recompra (Forte no sufoco)
 input int    InpMaxOrdens          = 5;      // Max Niveis por cesto [Reduzido de 6 para 5 - maior conservadorismo]
 input double InpTakeProfitDinheiro = 1.50;   // Alvo por cesto (USC) (Gira rapido e poe no bolso)
 input double InpHedgeLotContraFator= 0.25;   // Fator lote cesto CONTRA tendencia [v3.31: 0.20->0.25]
@@ -55,7 +55,7 @@ input group "=== FILTROS ==="
 input int    InpMaxSpread          = 25;     // Spread Max (Pts) [v3.23: 35->25]
 input int    InpATRPeriod          = 14;
 input int    InpFR_Candles         = 24;
-input double InpDist_Base          = 1.5;    // Distancia Grade [v3.24: 1.5->1.2 mais ciclos]
+input double InpDist_Base          = 1.2;    // Distancia Grade [v3.24: 1.5->1.2 mais ciclos]
 input double InpDistStep           = 0.30;   // Incremento Distancia [v3.23: 0.25->0.30]
 input int    InpMinDistancePoints  = 400;    // [v3.29+] Piso minimo de distancia da grade em pts (200->400)
 input bool   InpOneTradePerBar     = true;   // [v3.25+] 1 Recompra por barra H1 (evita avalanche)
@@ -64,8 +64,16 @@ input bool   InpFiltroRollover     = true;   // Rollover
 input double InpRecompra_ATR_Factor= 1.5;    // [v3.28] Fator ATR minimo (1.0->1.5). Mercado lateral: bloqueia.
 
 input group "=== PROTECAO ==="
-input double InpSoftStopEquity     = 400.0;  // SoftStop Global (USC) [v3.23: 500->400]
-input double InpSoftStopPerCesto   = 0.35;   // SoftStop Cesto: fracao do total [v3.23: 0.50->0.35]
+input double InpSGScoreBase        = 40.0;   // [SmartGate] Score minimo em DD zero (0-100)
+input double InpSGScoreFatorDD     = 300.0;  // [SmartGate] Quanto o score minimo sobe por % de DD
+input double InpSGDistFatorDD      = 4.0;    // [SmartGate] Multiplicador de distancia por % de DD
+input double InpSGLoteFatorDD      = 5.0;    // [SmartGate] Reducao de lote por % de DD
+input double InpSGDDAtencao        = 5.0;    // [SmartGate] DD% inicio zona amarela (atencao)
+input double InpSGDDCritico        = 20.0;   // [SmartGate] DD% inicio zona critica (bloqueio severo)
+input double InpSGPesoConta        = 0.35;   // [SmartGate] Peso camada risco de conta (0-1)
+input double InpSGPesoMercado      = 0.25;   // [SmartGate] Peso camada analise de mercado (0-1)
+input double InpSGPesoGrade        = 0.25;   // [SmartGate] Peso camada estado da grade (0-1)
+input double InpSGPesoAdaptativo   = 0.15;   // [SmartGate] Peso camada adaptativa/temporal (0-1)
 input double InpSwapAlertPct       = 0.5;
 
 input group "=== SETUP ==="
@@ -178,8 +186,12 @@ double   g_LoteBase        = 0.01;
 double   g_TaxaBRLAtual    = 5.88; // [v3.40] Taxa BRL atualizada de forma dinamica pelo par USDBRL
 double   g_TakeProfitBase  = 0;
 double   g_TakeProfitAtual = 0;
-double   g_SoftStopAtual   = 0;
-double   g_SoftStopPorCesto= 0;   // SoftStop individual de cada cesto
+double   g_SGScoreAtual    = 100.0; // [SmartGate] Score atual (0-100), inicia liberado
+double   g_SGScoreMinimo   = 40.0;  // [SmartGate] Score minimo exigido no momento
+double   g_SGDistMultipl   = 1.0;   // [SmartGate] Multiplicador de distancia atual
+double   g_SGLoteFator     = 1.0;   // [SmartGate] Fator de reducao de lote atual (0.25-1.0)
+bool     g_SGBloqueado     = false; // [SmartGate] Estado atual: true = bloqueado
+datetime g_SGUltimoCalculo = 0;     // [SmartGate] Timestamp do ultimo calculo de score
 double   g_BuyLoteInicial  = 0;   // [FIX #11] Lote inicial do cesto Buy
 double   g_SellLoteInicial = 0;   // [FIX #11] Lote inicial do cesto Sell
 double   g_BuyTPEfetivo    = 0;   // [v3.26] TP efetivo do cesto Buy (pode ser BE proporcional)
@@ -199,6 +211,8 @@ string   g_NewsName        = "";
 // Cooldown anti-chasing [v3.23]
 datetime g_BuyCooldownEnd  = 0;
 datetime g_SellCooldownEnd = 0;
+datetime g_SensorBarTime    = 0;
+double   g_ADX_Value        = 0.0;
 
 
 
@@ -625,15 +639,7 @@ datetime g_PanicoTimestamp  = 0;
 bool     g_PanicoLocalAguardando = false;
 datetime g_PanicoLocalTimestamp  = 0;
 bool     g_PanelInited       = false;  // [v3.24] Flag para limpar ghosts no 1o frame
-bool     g_SoftStopAtivo    = false;
-datetime g_SoftStopLogTime  = 0;
-datetime g_SensorBarTime    = 0;
-// [BUG-M4 FIX] Variaveis mortas removidas: g_CooldownAtivo, g_CooldownInicioTime
-
-// [v3.29] Controle de fase de Drawdown para alertas nao-repetitivos
-// Fase 0 = verde, 1 = amarelo (aviso), 2 = vermelho (critico)
 int      g_DD_FaseAtual     = 0;  // Fase atual da barra de Drawdown %
-int      g_SS_FaseAtual     = 0;  // Fase atual da barra SoftStop %
 
 // === MODO ANÁLISE DE MERCADO (default OFF) ===
 bool     g_ModoAnalise       = false;
@@ -738,8 +744,6 @@ void AddLog(string msg) {
 void AtualizarLoteBase() {
    if(!InpAutoLot||InpBancaRef<=0||InpLotInitial<=0) {
       g_LoteBase=InpLotInitial; g_TakeProfitBase=InpTakeProfitDinheiro; g_TakeProfitAtual=InpTakeProfitDinheiro;
-      g_SoftStopAtual=InpSoftStopEquity;
-      g_SoftStopPorCesto=InpSoftStopEquity*InpSoftStopPerCesto;
       return;
    }
    double bal  = AccountInfoDouble(ACCOUNT_BALANCE);
@@ -762,10 +766,8 @@ void AtualizarLoteBase() {
    g_LoteBase  = MathMax(minV,MathFloor(raw/step)*step);
    if(g_LoteBase>maxV) g_LoteBase=maxV;
    double fat  = g_LoteBase/0.01;
-   g_TakeProfitBase   = InpTakeProfitDinheiro*fat;   // [FIX #1] Usa valor configurado
+   g_TakeProfitBase   = InpTakeProfitDinheiro*fat;
    g_TakeProfitAtual  = g_TakeProfitBase;
-   g_SoftStopAtual    = InpSoftStopEquity*fat;        // [FIX #1] Usa valor configurado
-   g_SoftStopPorCesto = g_SoftStopAtual*InpSoftStopPerCesto;
 }
 
 void AtualizarLucroHoje() {
@@ -1005,6 +1007,7 @@ void AtualizarCestoBuy() {
       int nivel=g_BuyNivelAtual+1;
       double mult=MathMax(InpDist_Base,InpDist_Base+(nivel-2)*InpDistStep);
       double distMinima = MathMax(g_ATR_Value*mult, InpMinDistancePoints * _Point);
+      distMinima *= g_SGDistMultipl;
       g_BuyDistFalt = MathMax(0,distMinima-dist);
 
       double supFR=0; g_BuyTfAlvo="DISTANCIA";
@@ -1126,6 +1129,7 @@ void AtualizarCestoSell() {
       int nivel=g_SellNivelAtual+1;
       double mult=MathMax(InpDist_Base,InpDist_Base+(nivel-2)*InpDistStep);
       double distMinima = MathMax(g_ATR_Value*mult, InpMinDistancePoints * _Point);
+      distMinima *= g_SGDistMultipl;
       g_SellDistFalt = MathMax(0,distMinima-dist);
 
       double resFR=0; g_SellTfAlvo="DISTANCIA";
@@ -1337,22 +1341,147 @@ void GerenciarTPSell() {
 //===================================================================
 // SOFT STOP Ã¢â‚¬â€  MONITORA DD COMBINADO DOS 2 CESTOS
 //===================================================================
-bool SoftStopAtingido() {
-   // [BUG-C2 FIX] Usa PNL real dos cestos do ROBO, nao DD da conta toda
-   // Loga APENAS na transicao de estado (evita supressao por cooldown durante oscilacoes rapidas)
-   double ddRobo = MathAbs(MathMin(0.0, (g_BuyLucro+g_BuySwap) + (g_SellLucro+g_SellSwap)));
-   bool atual = (ddRobo >= g_SoftStopAtual);
-   if(atual && !g_SoftStopAtivo) {  // Ativou agora
-      AddLog("!! SoftStop ATIVADO ("+DoubleToString(g_SoftStopAtual,0)+" USC DD Robo) - AMBOS cestos bloqueados!");
-      g_SoftStopLogTime = TimeCurrent();
+
+//===================================================================
+// SMART GATE [v3.41] — Motor de decisao adaptativo de recompra
+// Substitui o Soft Stop mecanico por score continuo 0-100
+// Quanto maior o DD, mais exigente em score, distancia e lote
+//===================================================================
+double CalcularSmartGateScore() {
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   if(balance <= 0) return 100.0;
+
+   // --- DD do robo (apenas posicoes do Orion) ---
+   double pnlTotal = 0;
+   for(int i = 0; i < PositionsTotal(); i++) {
+      ulong tk = PositionGetTicket(i);
+      if(!PositionSelectByTicket(tk)) continue;
+      long mag = PositionGetInteger(POSITION_MAGIC);
+      if(mag < InpMagicNumberBase || mag > InpMagicNumberBase + 999999) continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      pnlTotal += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
    }
-   if(!atual && g_SoftStopAtivo) {  // Liberou agora
-      AddLog("OK SoftStop LIBERADO. DD Robo: "+DoubleToString(ddRobo,2)+" USC");
-      g_SoftStopLogTime = TimeCurrent();
+   double dd_usd = MathMax(0.0, -pnlTotal);
+   double dd_pct = dd_usd / balance; // 0.0 a 1.0
+
+   // === CAMADA 1: Risco de conta (score 0-100) ===
+   double scoreConta = 100.0;
+   // DD penaliza linearmente ate score zero quando dd_pct = 1 / (peso * 3)
+   scoreConta -= dd_pct * 300.0;
+   // Margem livre penaliza se abaixo de 30%
+   double marginFree = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   double marginTotal = AccountInfoDouble(ACCOUNT_MARGIN);
+   if(marginTotal > 0) {
+      double marginPct = marginFree / (marginFree + marginTotal);
+      if(marginPct < 0.30) scoreConta -= (0.30 - marginPct) * 100.0;
    }
-   g_SoftStopAtivo = atual;
-   return atual;
+   // Fundo de reserva proximo do teto: reduz score levemente
+   double fundoRes = GlobalVariableGet("OH_FundoReserva_" + _Symbol);
+   double tetoFundo = balance * (InpTetoFundoReservaPct / 100.0);
+   if(tetoFundo > 0 && fundoRes > 0) {
+      double fundoPct = fundoRes / tetoFundo;
+      if(fundoPct > 0.80) scoreConta -= (fundoPct - 0.80) * 50.0;
+   }
+   scoreConta = MathMax(0.0, MathMin(100.0, scoreConta));
+
+   // === CAMADA 2: Analise de mercado (score 0-100) ===
+   double scoreMercado = 100.0;
+   // ATR relativo: volatilidade muito alta penaliza
+   if(g_ATR_Value > 0) {
+      double atrNorm = g_ATR_Value / (_Point * 200.0); // Normaliza contra 200pts
+      if(atrNorm > 2.0) scoreMercado -= (atrNorm - 2.0) * 20.0;
+   }
+   // Spread atual vs max permitido
+   int spr = (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
+   if(InpMaxSpread > 0) {
+      double sprPct = (double)spr / InpMaxSpread;
+      if(sprPct > 0.70) scoreMercado -= (sprPct - 0.70) * 150.0;
+   }
+   // ADX alto = tendencia forte = mercado direcional (penaliza grade neutra)
+   if(g_ADX_Value > 40.0) scoreMercado -= (g_ADX_Value - 40.0) * 1.5;
+   scoreMercado = MathMax(0.0, MathMin(100.0, scoreMercado));
+
+   // === CAMADA 3: Estado da grade (score 0-100) ===
+   double scoreGrade = 100.0;
+   // Nivel atual da grade penaliza progressivamente
+   int nivelMax = InpMaxOrdens > 0 ? InpMaxOrdens : 6;
+   int nivelBuy  = g_BuyTotal > 0  ? g_BuyNivelAtual  : 0;
+   int nivelSell = g_SellTotal > 0 ? g_SellNivelAtual : 0;
+   int nivelPior = MathMax(nivelBuy, nivelSell);
+   scoreGrade -= (nivelPior / (double)nivelMax) * 60.0;
+   // Lotagem acumulada vs balance
+   double volTotal = g_BuyVolume + g_SellVolume;
+   double exposicao = volTotal * 100000.0 * _Point * 10.0; // estimativa USD
+   double exposicaoPct = (balance > 0) ? (exposicao / balance) : 0;
+   if(exposicaoPct > 1.0) scoreGrade -= (exposicaoPct - 1.0) * 20.0;
+   scoreGrade = MathMax(0.0, MathMin(100.0, scoreGrade));
+
+   // === CAMADA 4: Adaptativa/temporal (score 0-100) ===
+   double scoreAdapt = 100.0;
+   // Penaliza se o cesto esta em DD ha muito tempo (> 4h)
+   datetime agora = TimeCurrent();
+   if(g_BuyTotal > 0 && g_BuyLucro + g_BuySwap < 0) {
+      // Quanto mais tempo em negativo, mais penaliza (max 40pts em 24h)
+      double horasDD = (agora - g_SensorBarTime) / 3600.0;
+      scoreAdapt -= MathMin(40.0, horasDD * 1.67);
+   }
+   if(g_SellTotal > 0 && g_SellLucro + g_SellSwap < 0) {
+      double horasDD = (agora - g_SensorBarTime) / 3600.0;
+      scoreAdapt -= MathMin(40.0, horasDD * 1.67);
+   }
+   scoreAdapt = MathMax(0.0, MathMin(100.0, scoreAdapt));
+
+   // === SCORE FINAL PONDERADO ===
+   double scoreFinal = (scoreConta   * InpSGPesoConta)
+                     + (scoreMercado * InpSGPesoMercado)
+                     + (scoreGrade   * InpSGPesoGrade)
+                     + (scoreAdapt   * InpSGPesoAdaptativo);
+
+   // Normaliza (soma dos pesos pode nao ser exatamente 1.0)
+   double somaPesos = InpSGPesoConta + InpSGPesoMercado + InpSGPesoGrade + InpSGPesoAdaptativo;
+   if(somaPesos > 0) scoreFinal /= somaPesos;
+
+   // === ATUALIZA GLOBALS ADAPTATIVOS ===
+   // Score minimo sobe com DD (mais DD = mais exigente)
+   g_SGScoreMinimo  = MathMin(99.0, InpSGScoreBase + (dd_pct * InpSGScoreFatorDD));
+   // Multiplicador de distancia cresce com DD
+   g_SGDistMultipl  = 1.0 + (dd_pct * InpSGDistFatorDD);
+   // Fator de lote cai com DD (minimo 25% do lote)
+   g_SGLoteFator    = MathMax(0.25, 1.0 - (dd_pct * InpSGLoteFatorDD));
+
+   bool bloqueadoAntes = g_SGBloqueado;
+   g_SGScoreAtual   = MathMax(0.0, MathMin(100.0, scoreFinal));
+   g_SGBloqueado    = (g_SGScoreAtual < g_SGScoreMinimo);
+
+   if(g_SGBloqueado && !bloqueadoAntes)
+      AddLog("[SmartGate] BLOQUEADO — Score: " + DoubleToString(g_SGScoreAtual,1)
+           + " < Min: " + DoubleToString(g_SGScoreMinimo,1)
+           + " | DD: " + DoubleToString(dd_pct*100.0,1) + "%"
+           + " | DistX: " + DoubleToString(g_SGDistMultipl,2)
+           + " | LoteX: " + DoubleToString(g_SGLoteFator,2));
+   if(!g_SGBloqueado && bloqueadoAntes)
+      AddLog("[SmartGate] LIBERADO — Score: " + DoubleToString(g_SGScoreAtual,1)
+           + " >= Min: " + DoubleToString(g_SGScoreMinimo,1));
+
+   g_SGUltimoCalculo = agora;
+   return g_SGScoreAtual;
 }
+
+// Aplica fator de lote do SmartGate sobre lote calculado
+double AplicarSGLote(double lote) {
+   double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+   double minV = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+   if(step <= 0) step = 0.01;
+   double ajustado = MathFloor((lote * g_SGLoteFator) / step) * step;
+   return MathMax(minV, ajustado);
+}
+
+// Retorna distancia minima ajustada pelo SmartGate
+double DistanciaMinimaSmartGate(double distBase) {
+   return distBase * g_SGDistMultipl;
+}
+
+
 
 bool AntiSpike() {
    if(g_ATR_Value<=0) return true;
@@ -1594,7 +1723,6 @@ void FecharTudoCiclo(bool autoReset) {
    g_BuyNivelAtual       = 0;
    g_SellNivelAtual      = 0;
    g_DD_FaseAtual        = 0;
-   g_SS_FaseAtual        = 0;
    
    // Zera contadores de lucro imediatamente (painel mostra 0 na hora)
    g_HistLucroGlobal   = 0;
@@ -1771,7 +1899,7 @@ void VerificarCicloEquity() {
    double profitNet = g_HistLucroGlobal + global_total;
    double pctNet = (g_EquityCycleBaseBalance > 0) ? (profitNet / g_EquityCycleBaseBalance * 100.0) : 0.0;
    
-   // A meta percentual Ã© fixa em relaÃ§Ã£o Ã  base de referÃªncia deste ciclo
+   // A meta percentual Ã© fixa em relaÃ§Ã£o Ã  base de referÃªncia deste ciclo
    double currentTargetPct = InpMetaCicloEquityPct;
    
    g_PeakProfit = pctNet;
@@ -1895,7 +2023,8 @@ void ExecutarGradeBuy() {
 
    if((int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD)>InpMaxSpread) return;
 
-   double novoLote=CalcNovoLote(g_BuyNivelAtual, g_BuyLoteInicial);  // [FIX #11]
+   double novoLote=CalcNovoLote(g_BuyNivelAtual, g_BuyLoteInicial);
+   novoLote = AplicarSGLote(novoLote); // [SmartGate] Reduz lote conforme DD
    double ask=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
    double margem=0;
    if(OrderCalcMargin(ORDER_TYPE_BUY,_Symbol,novoLote,ask,margem))
@@ -1949,7 +2078,8 @@ void ExecutarGradeSell() {
 
    if((int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD)>InpMaxSpread) return;
 
-   double novoLote=CalcNovoLote(g_SellNivelAtual, g_SellLoteInicial);  // [FIX #11]
+   double novoLote=CalcNovoLote(g_SellNivelAtual, g_SellLoteInicial);
+   novoLote = AplicarSGLote(novoLote); // [SmartGate] Reduz lote conforme DD
    double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
    double margem=0;
    if(OrderCalcMargin(ORDER_TYPE_SELL,_Symbol,novoLote,bid,margem))
@@ -1992,7 +2122,10 @@ void AtualizarSensores() {
    double buf[]; ArraySetAsSeries(buf,true);
    if(CopyBuffer(handleATR,0,0,1,buf)>0) g_ATR_Value=buf[0];
    if(CopyBuffer(handleEMA,0,0,1,buf)>0) g_EMA_Value=buf[0];
-   if(CopyBuffer(handleADXTrend,0,0,1,buf)>0) g_ADX_Trend=buf[0];
+   if(CopyBuffer(handleADXTrend,0,0,1,buf)>0) {
+       g_ADX_Trend = buf[0];
+       g_ADX_Value = buf[0];
+   }
    if(CopyBuffer(handleADXTrend,1,0,1,buf)>0) g_DIPlus_Trend=buf[0];
    if(CopyBuffer(handleADXTrend,2,0,1,buf)>0) g_DIMinus_Trend=buf[0];
    datetime bar=iTime(_Symbol,InpBaseTF,0);
@@ -2081,7 +2214,7 @@ int OnInit() {
    EventSetTimer(1);
    AddLog("ORION v3.40 OK! Par: "+_Symbol+" | MagicBuy="+IntegerToString(g_MagicBuy));
    AddLog("[WEB] Web Ativa: " + (InpWebAtiva ? "SIM" : "NAO") + " | URL: " + InpWebUrl);
-   AddLog("Lote:"+DoubleToString(g_LoteBase,3)+" TP:"+DoubleToString(g_TakeProfitAtual,2)+" SS:"+DoubleToString(g_SoftStopAtual,0)+" [LotBase="+DoubleToString(InpLotInitial,3)+"]");
+   AddLog("Lote:"+DoubleToString(g_LoteBase,3)+" TP:"+DoubleToString(g_TakeProfitAtual,2)+" SG_ScoreBase:"+DoubleToString(InpSGScoreBase,0)+" [LotBase="+DoubleToString(InpLotInitial,3)+"]");
    if(InpCooldownHabilitado) AddLog("Cooldown Ativo: "+IntegerToString(InpCooldownMinutos)+" min apos cada ciclo.");
    if(InpRecompra_ATR_Factor > 0)
       AddLog("[v3.28] ATR-Filter ATIVO: dist min = "+DoubleToString(InpRecompra_ATR_Factor,1)+" x ATR("+IntegerToString(InpATRPeriod)+") entre recompras.");
@@ -2716,61 +2849,54 @@ void OnTick() {
 
    ProcessarSmartTrimming();
 
-   bool ssAtivo=SoftStopAtingido();
+   // [SmartGate v3.41] Calcula score antes de qualquer decisao de recompra
+   CalcularSmartGateScore();
+   bool sgBloqueado = g_SGBloqueado;
+
    bool spike=AntiSpike();
    bool roll=FiltroRollover();
    int spr=(int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD);
 
    // HEDGE ASSIMETRICO: usa EMA para dar lote maior na direcao da tendencia
    double close1  = iClose(_Symbol,InpTrendTF,1);
-   bool   tendBuy = (close1>g_EMA_Value);  // tendencia de alta -> Buy e o favorito
+   bool   tendBuy = (close1>g_EMA_Value);
    double step    = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
    double minV    = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
 
-   // Lote do cesto favorito (tendencia) = lote cheio
-   // Lote do cesto contra-tendencia = InpHedgeLotContraFator * lote base
    double loteContra = MathMax(minV, MathFloor(g_LoteBase*InpHedgeLotContraFator/step)*step);
    double loteBuy    = tendBuy ? g_LoteBase : loteContra;
    double loteSell   = tendBuy ? loteContra : g_LoteBase;
 
-   // SoftStop individual: cada cesto tem seu proprio freio
-   bool ssBuyAtivo  = (g_BuyTotal>0  && (g_BuyLucro+g_BuySwap)<-g_SoftStopPorCesto);
-   bool ssSellAtivo = (g_SellTotal>0 && (g_SellLucro+g_SellSwap)<-g_SoftStopPorCesto);
+   // [SmartGate] Alerta de cesto em pressao (substitui alerta do SoftStop por cesto)
+   bool buyEmPressao  = (g_BuyTotal>0  && (g_BuyLucro+g_BuySwap)<0 && g_SGScoreAtual<60.0);
+   bool sellEmPressao = (g_SellTotal>0 && (g_SellLucro+g_SellSwap)<0 && g_SGScoreAtual<60.0);
 
-   // Apenas Aviso Sonoro e Visual caso limite do cesto seja atingido (nao fecha automaticamente)
-   // [v3.29 FIX] Alerta UMA vez por par enquanto houver posicoes — reseta APENAS quando o cesto fechar
    static bool alertBuySent = false;
-   if(ssBuyAtivo) {
+   if(buyEmPressao) {
       if(!alertBuySent) {
-         // Alert removido a pedido do usuario
-         AddLog("[BUY] ALERTA: SoftStop da cesta Atingido. Cesto flutuando livremente.");
+         AddLog("[BUY] ALERTA SmartGate: Score=" + DoubleToString(g_SGScoreAtual,1) + " — cesto em pressao, recompras restringidas.");
          alertBuySent = true;
       }
-   } else if(g_BuyTotal == 0) {
-      alertBuySent = false;  // Reseta SOMENTE quando o cesto estiver vazio (fechado)
-   }
+   } else if(g_BuyTotal == 0) { alertBuySent = false; }
 
    static bool alertSellSent = false;
-   if(ssSellAtivo) {
+   if(sellEmPressao) {
       if(!alertSellSent) {
-         // Alert removido a pedido do usuario
-         AddLog("[SELL] ALERTA: SoftStop da cesta Atingido. Cesto flutuando livremente.");
+         AddLog("[SELL] ALERTA SmartGate: Score=" + DoubleToString(g_SGScoreAtual,1) + " — cesto em pressao, recompras restringidas.");
          alertSellSent = true;
       }
-   } else if(g_SellTotal == 0) {
-      alertSellSent = false;  // Reseta SOMENTE quando o cesto estiver vazio (fechado)
-   }
+   } else if(g_SellTotal == 0) { alertSellSent = false; }
 
-   // === CESTO COMPRA === [v3.23: aplica cooldown]
+   // === CESTO COMPRA ===
    bool ignorarCooldownBuy = (InpCooldownApenasContra && tendBuy);
    bool buyCooldownAtivo = (InpCooldownHabilitado && TimeCurrent() < g_BuyCooldownEnd && !ignorarCooldownBuy) || (TimeCurrent() < g_EquityCycleCooldownEnd);
-   if(!ssAtivo&&!ssBuyAtivo&&!spike&&!roll&&spr<=InpMaxSpread&&!buyCooldownAtivo) {
+   if(!sgBloqueado&&!spike&&!roll&&spr<=InpMaxSpread&&!buyCooldownAtivo) {
       if(g_BuyTotal==0&&!g_AguardandoBuy) {
          if(!g_NewsActive) {
             double ask=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
             trade.SetExpertMagicNumber(g_MagicBuy);
             g_AguardandoBuy=true; g_ConfirmBuy=TimeCurrent();
-            g_BuyLoteInicial=loteBuy;   // [FIX #11] Armazena lote inicial
+            g_BuyLoteInicial=loteBuy;
             string dir_tag=tendBuy?"[TENDENCIA]":"[CONTRA]";
             if(trade.Buy(loteBuy,_Symbol,ask,0,0,"OH_B1"))
                AddLog("[BUY] INICIO "+dir_tag+" Lote:"+DoubleToString(loteBuy,3));
@@ -2784,7 +2910,6 @@ void OnTick() {
          }
       }
    } else if(buyCooldownAtivo && g_BuyTotal==0) {
-      // Mostra tempo restante de cooldown a cada 10 minutos
       static datetime lastCooldownLogBuy = 0;
       if((TimeCurrent()-lastCooldownLogBuy) >= 600) {
          int restante = (int)((g_BuyCooldownEnd - TimeCurrent()) / 60);
@@ -2796,12 +2921,12 @@ void OnTick() {
    // === CESTO VENDA === [v3.23: aplica cooldown]
    bool ignorarCooldownSell = (InpCooldownApenasContra && !tendBuy);
    bool sellCooldownAtivo = (InpCooldownHabilitado && TimeCurrent() < g_SellCooldownEnd && !ignorarCooldownSell) || (TimeCurrent() < g_EquityCycleCooldownEnd);
-   if(!ssAtivo&&!ssSellAtivo&&!spike&&!roll&&spr<=InpMaxSpread&&!sellCooldownAtivo) {
+   if(!sgBloqueado&&!spike&&!roll&&spr<=InpMaxSpread&&!sellCooldownAtivo) {
       if(g_SellTotal==0&&!g_AguardandoSell) {
          if(!g_NewsActive) {
             double bid=SymbolInfoDouble(_Symbol,SYMBOL_BID);
             trade.SetExpertMagicNumber(g_MagicSell);
-            g_SellLoteInicial=loteSell;  // [FIX #11] Armazena lote inicial
+            g_SellLoteInicial=loteSell;
             string dir_tag=!tendBuy?"[TENDENCIA]":"[CONTRA]";
             if(trade.Sell(loteSell,_Symbol,bid,0,0,"OH_S1"))
                AddLog("[SELL] INICIO "+dir_tag+" Lote:"+DoubleToString(loteSell,3));
@@ -2815,7 +2940,6 @@ void OnTick() {
          }
       }
    } else if(sellCooldownAtivo && g_SellTotal==0) {
-      // Mostra tempo restante de cooldown a cada 10 minutos
       static datetime lastCooldownLogSell = 0;
       if((TimeCurrent()-lastCooldownLogSell) >= 600) {
          int restante = (int)((g_SellCooldownEnd - TimeCurrent()) / 60);
@@ -2852,62 +2976,58 @@ void MonitorarFasesDD() {
    double global_pnl = global_profit + global_swap;
    double dd_usd = MathMax(0.0, -global_pnl);
    double dd_pct = dd_usd / balance * 100.0;
-   double pct_ss = (g_SoftStopAtual > 0) ? MathMin(1.0, dd_usd / g_SoftStopAtual) : 0.0;
 
    // --- FASE DRAWDOWN % ---
-   // [BUG FIX] Implementa Histerese para evitar que o alarme toque sem parar na divisao
    int novaFaseDD = g_DD_FaseAtual;
    if(novaFaseDD == 0) {
       if(dd_pct >= 20.0) novaFaseDD = 2;
       else if(dd_pct >= 10.0) novaFaseDD = 1;
    } else if(novaFaseDD == 1) {
       if(dd_pct >= 20.0) novaFaseDD = 2;
-      else if(dd_pct < 8.0) novaFaseDD = 0; // Histerese (8% ao inves de 10%)
+      else if(dd_pct < 8.0) novaFaseDD = 0;
    } else if(novaFaseDD == 2) {
-      if(dd_pct < 18.0) novaFaseDD = 1; // Histerese (18% ao inves de 20%)
+      if(dd_pct < 18.0) novaFaseDD = 1;
    }
 
    if(novaFaseDD > g_DD_FaseAtual) {
-      if(novaFaseDD == 2)  // Log apenas (Alert removido)
+      if(novaFaseDD == 2)
          AddLog("[DD VERMELHO] Drawdown critico: " + DoubleToString(dd_pct,1) +
                "% (" + DoubleToString(dd_usd,2) + " USC) — PERIGO MAXIMO! Par: " + _Symbol);
       AddLog((novaFaseDD==1?"[DD] AMARELO: ":"[DD] VERMELHO: ") +
              DoubleToString(dd_pct,1)+"% | "+DoubleToString(dd_usd,2)+" USC");
       g_DD_FaseAtual = novaFaseDD;
    } else if(novaFaseDD < g_DD_FaseAtual) {
-      // BUG #5 FIX: Só loga recuperação se havia DD genuíno (equity estava abaixo do balance)
-      // Evita mensagens enganosas de "recuperação" quando um cesto lucrativo fecha e
-      // o lucro flutuante some do patrimônio, mas não havia perda real de capital.
       if(g_DD_FaseAtual > 0 && dd_usd > 0)
          AddLog("[DD] Recuperado para zona " + (novaFaseDD==0?"VERDE":"AMARELA") +
                 " — " + DoubleToString(dd_pct,1) + "%");
       g_DD_FaseAtual = novaFaseDD;
    }
 
-   // --- FASE SOFTSTOP % ---
-   int novaFaseSS = g_SS_FaseAtual;
-   if(novaFaseSS == 0) {
-      if(pct_ss >= 0.66) novaFaseSS = 2;
-      else if(pct_ss >= 0.33) novaFaseSS = 1;
-   } else if(novaFaseSS == 1) {
-      if(pct_ss >= 0.66) novaFaseSS = 2;
-      else if(pct_ss < 0.28) novaFaseSS = 0; // Histerese
-   } else if(novaFaseSS == 2) {
-      if(pct_ss < 0.61) novaFaseSS = 1; // Histerese
+   // --- FASE SMART GATE SCORE (substitui fase SoftStop) ---
+   // Score cai = risco sobe: fase 0 = verde (>70), 1 = amarelo (40-70), 2 = vermelho (<40)
+   static int g_SG_FaseAtual = 0;
+   int novaFaseSG = g_SG_FaseAtual;
+   if(novaFaseSG == 0) {
+      if(g_SGScoreAtual < 40.0) novaFaseSG = 2;
+      else if(g_SGScoreAtual < 70.0) novaFaseSG = 1;
+   } else if(novaFaseSG == 1) {
+      if(g_SGScoreAtual < 40.0) novaFaseSG = 2;
+      else if(g_SGScoreAtual >= 75.0) novaFaseSG = 0;
+   } else if(novaFaseSG == 2) {
+      if(g_SGScoreAtual >= 45.0) novaFaseSG = 1;
    }
 
-   if(novaFaseSS > g_SS_FaseAtual) {
-      if(novaFaseSS == 2)  // Log apenas (Alert removido)
-         AddLog("[SS VERMELHO] SoftStop CRITICO: " + DoubleToString(pct_ss*100.0,1) +
-               "% do limite (" + DoubleToString(g_SoftStopAtual,0) + " USC) — PERIGO! Par: " + _Symbol);
-      AddLog((novaFaseSS==1?"[SS] AMARELO: ":"[SS] VERMELHO: ") +
-             DoubleToString(pct_ss*100.0,1)+"% do limite");
-      g_SS_FaseAtual = novaFaseSS;
-   } else if(novaFaseSS < g_SS_FaseAtual) {
-      if(g_SS_FaseAtual > 0)
-         AddLog("[SS] Recuperado para zona " + (novaFaseSS==0?"VERDE":"AMARELA") +
-                " — " + DoubleToString(pct_ss*100.0,1) + "%");
-      g_SS_FaseAtual = novaFaseSS;
+   if(novaFaseSG > g_SG_FaseAtual) {
+      if(novaFaseSG == 2)
+         AddLog("[SG VERMELHO] SmartGate CRITICO: Score=" + DoubleToString(g_SGScoreAtual,1)
+              + " Min=" + DoubleToString(g_SGScoreMinimo,1) + " — BLOQUEADO! Par: " + _Symbol);
+      AddLog((novaFaseSG==1?"[SG] AMARELO: Score=":"[SG] VERMELHO: Score=") + DoubleToString(g_SGScoreAtual,1));
+      g_SG_FaseAtual = novaFaseSG;
+   } else if(novaFaseSG < g_SG_FaseAtual) {
+      if(g_SG_FaseAtual > 0)
+         AddLog("[SG] Recuperado para zona " + (novaFaseSG==0?"VERDE":"AMARELA")
+              + " — Score=" + DoubleToString(g_SGScoreAtual,1));
+      g_SG_FaseAtual = novaFaseSG;
    }
 }
 
@@ -3646,9 +3766,10 @@ void DesenharPainel() {
       // BOX 3
       PRect("bg_fr",lx,cur,pw-pad*2-10,38,CLR_BG_CARD,CLR_LINE_SOFT,205);
       PLabel("c_fr_id",lx+8,cur+10,"3",CLR_TXT_DIM,14,true);
-      PLabel("c_fr_t",lx+26,cur+5,"Freio Drawdown (2 Cestos)",CLR_TXT_PRIMARY,9,true);
-      PLabel("c_fr_d",lx+26,cur+19,"("+DoubleToString(InpSoftStopEquity,0)+" USC base)",CLR_TXT_DIM,8);
-      PLabelR("c_fr_v",rx-8,cur+11,DoubleToString(g_SoftStopAtual,2)+" USC",CLR_AMBER,11,true); cur+=44;
+      PLabel("c_fr_t",lx+26,cur+5,"Smart Gate (Protecao Adaptativa)",CLR_TXT_PRIMARY,9,true);
+      PLabel("c_fr_d",lx+26,cur+19,"Score: "+DoubleToString(g_SGScoreAtual,0)+" | Min: "+DoubleToString(g_SGScoreMinimo,0)+" | DistX: "+DoubleToString(g_SGDistMultipl,2)+" | LoteX: "+DoubleToString(g_SGLoteFator,2),CLR_TXT_DIM,8);
+      color sgClr = g_SGBloqueado ? C'255,82,82' : (g_SGScoreAtual < 60.0 ? CLR_AMBER : C'0,200,83');
+      PLabelR("c_fr_v",rx-8,cur+11,DoubleToString(g_SGScoreAtual,0),sgClr,11,true); cur+=44;
       // BOX 4
       PRect("bg_nx",lx,cur,pw-pad*2-10,48,CLR_BG_CARD,CLR_LINE_SOFT,205);
       PLabel("c_nx_id",lx+8,cur+15,"4",CLR_TXT_DIM,14,true);
@@ -3822,8 +3943,8 @@ void DesenharPainel() {
    // DRAWDOWN GLOBAL - barra 3 zonas pre-pintadas (verde→amarelo→vermelho)
    double dd_glb_pct = (balance>0) ? MathAbs(MathMin(0.0, global_total))/balance*100.0 : 0.0;
    color dd_glb_clr = (dd_glb_pct>=35.0)?C'255,82,82':(dd_glb_pct>=20.0?CLR_AMBER:C'0,200,83');
-   double maxDDAllowedPct = (balance > 0) ? (g_SoftStopAtual / balance * 100.0) : 0.0;
-   string sLabelGlbDD = "DRAWDOWN GLOBAL (" + DoubleToString(maxDDAllowedPct, 0) + "%)";
+   double maxDDAllowedPct = (balance > 0) ? (g_SGScoreMinimo / 100.0 * 30.0) : 0.0;
+   string sLabelGlbDD = "DRAWDOWN GLOBAL | SG Score Min: " + DoubleToString(g_SGScoreMinimo, 0);
    PLabel("glb_dd_l",lx,cur,sLabelGlbDD,CLR_TXT_DIM,8);
    PLabelR("glb_dd_v",rx-2,cur,DoubleToString(dd_glb_pct,2)+"%",dd_glb_clr,10,true); cur+=16;
    int gzw1 = (int)MathRound(0.40 * thm_w);
@@ -3930,7 +4051,7 @@ void DesenharPainel() {
    string signalPL = (lucroTotal>=0) ? "+" : "";
    PLabelR("acc_pl_v",rx-2,cur,signalPL+DoubleToString(lucroTotal,2)+" USC",lucroTotal>=0?C'0,200,83':C'255,82,82',13,true); cur+=20;
    
-   double pPct=(g_SoftStopAtual>0)?MathMin(1.0,MathAbs(lucroTotal)/g_SoftStopAtual):0;
+   double pPct = MathMin(1.0, g_SGScoreAtual / 100.0);
    PBar("m_pl",lx,cur,thm_w,6,pPct,C'30,38,50',lucroTotal>=0?C'0,200,83':C'255,82,82'); cur+=16;
    
    // DRAWDOWN LOCAL - barra 3 zonas pre-pintadas
@@ -3949,18 +4070,16 @@ void DesenharPainel() {
    cur+=18;
    
    // SOFTSTOP - barra 3 zonas pre-pintadas
-   double pct_ss=MathMin(1.0,(g_SoftStopAtual>0?dd_usd/g_SoftStopAtual:0));
-   color ss_clr=(pct_ss>=0.80)?C'255,82,82':(pct_ss>=0.50?CLR_AMBER:C'0,200,83');
-   PLabel("lbl_ss_l",lx,cur,"LIMITE SOFTSTOP",CLR_TXT_DIM,8);
-   PLabelR("lbl_ss_v",rx-2,cur,DoubleToString(g_SoftStopAtual,0)+" USC",CLR_TXT_PRIMARY,10,true); cur+=14;
+   double pct_sg = MathMin(1.0, g_SGScoreAtual / 100.0);
+   color sg_clr  = g_SGBloqueado ? C'255,82,82' : (g_SGScoreAtual < 60.0 ? CLR_AMBER : C'0,200,83');
+   PLabel("lbl_ss_l",lx,cur,"SMART GATE SCORE",CLR_TXT_DIM,8);
+   PLabelR("lbl_ss_v",rx-2,cur,DoubleToString(g_SGScoreAtual,0)+" / "+DoubleToString(g_SGScoreMinimo,0)+" min",CLR_TXT_PRIMARY,10,true); cur+=14;
    int szw1 = (int)MathRound(0.50 * thm_w);
    int szw2 = (int)MathRound(0.30 * thm_w);
    PRect("thrm_z1",lx,             cur,szw1,             8,C'12,60,35', -1,204);
    PRect("thrm_z2",lx+szw1,        cur,szw2,             8,C'60,42,0',  -1,204);
    PRect("thrm_z3",lx+szw1+szw2,   cur,thm_w-szw1-szw2,  8,C'60,14,14', -1,204);
-   int ss_fill=(int)MathRound(pct_ss*thm_w);
-   if(ss_fill>1) PRect("thrm_fill",lx,cur,ss_fill,8,ss_clr,-1,206);
-   else          ObjectDelete(0, PANEL_PREFIX+"thrm_fill");
+   PRect("thrm_sg_fill",lx,cur,(int)MathRound(pct_sg*thm_w),8,sg_clr,-1,205);
    cur+=18;
 
    // LUCRO ACUMULADO POR MOEDA
@@ -4047,8 +4166,7 @@ void DesenharPainel() {
    } else {
       ObjectDelete(0,PANEL_PREFIX+"buy_vz");
       int bh=96; // altura do card (reduzido)
-      bool isBuyLim = ((g_BuyLucro+g_BuySwap) < -g_SoftStopPorCesto);
-      // [RENDER FIX] Forca delete+recriacao para garantir BACK=true no MT5
+      bool isBuyLim = (g_SGScoreAtual < 60.0 && (g_BuyLucro+g_BuySwap) < 0);
       ObjectDelete(0,PANEL_PREFIX+"bg_buy");
       PRect("bg_buy",px+pad-2,cur,pw-(pad*2)+4,bh,C'22,35,30',isBuyLim ? C'255,82,82' : C'0,200,83',200,true);
 
@@ -4079,11 +4197,11 @@ void DesenharPainel() {
 
       // Barra progresso Alvo (Termometro Bi-direcional)
       double bPct = 0;
-      double softStopLimit = g_SoftStopAtual > 0 ? g_SoftStopAtual : 1000.0;
+      double sgRefLimit = (g_TakeProfitAtual > 0) ? g_TakeProfitAtual * 4.0 : 1000.0;
       if (bpl >= 0) {
          bPct = (g_TakeProfitAtual > 0) ? MathMin(1.0, bpl / g_TakeProfitAtual) : 0;
       } else {
-         bPct = -1.0 * MathMin(1.0, MathAbs(bpl) / softStopLimit);
+         bPct = -1.0 * MathMin(1.0, MathAbs(bpl) / sgRefLimit);
       }
       color barFillBuyPos = CLR_TEAL;
       color barFillBuyNeg = CLR_RED;
@@ -4117,7 +4235,7 @@ void DesenharPainel() {
    }
 
    // Grade inferior Buy — Compras sempre na paleta Verde/Amarela para nao confundir com Venda
-   bool isBuyLimGrd = ((g_BuyLucro+g_BuySwap) < -g_SoftStopPorCesto);
+   bool isBuyLimGrd = (g_SGBloqueado && g_BuyTotal > 0 && (g_BuyLucro+g_BuySwap) < 0);
    color buyGradeClr = isBuyLimGrd ? C'0,255,128' : (g_BuyTotal >= InpMaxOrdens-1 ? CLR_AMBER : CLR_TEAL);
    PLabel("buy_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
    PGradeBar("buy_grade",lx+46,cur,thm_w-118,10,InpMaxOrdens,g_BuyTotal,buyGradeClr,C'14,24,18');
@@ -4152,10 +4270,9 @@ void DesenharPainel() {
    } else {
       ObjectDelete(0,PANEL_PREFIX+"sel_vz");
       int sh=96; // altura do card (reduzida)
-      bool isSelLim = ((g_SellLucro+g_SellSwap) < -g_SoftStopPorCesto);
-      // [RENDER FIX] Forca delete+recriacao para garantir BACK=true no MT5
+      bool isSelLim = (g_SGScoreAtual < 60.0 && (g_SellLucro+g_SellSwap) < 0);
       ObjectDelete(0,PANEL_PREFIX+"bg_sel");
-      PRect("bg_sel",px+pad-2,cur,pw-(pad*2)+4,sh,C'40,25,25',isSelLim ? C'255,82,82' : C'0,200,83',200,true); // [v3.32 FIX]
+      PRect("bg_sel",px+pad-2,cur,pw-(pad*2)+4,sh,C'40,25,25',isSelLim ? C'255,82,82' : C'0,200,83',200,true);
 
       cur+=6;
 
@@ -4182,11 +4299,11 @@ void DesenharPainel() {
 
       // Barra progresso Alvo (Termometro Bi-direcional)
       double sPct = 0;
-      double softStopLimitS = g_SoftStopAtual > 0 ? g_SoftStopAtual : 1000.0;
+      double sgRefLimitS = (g_TakeProfitAtual > 0) ? g_TakeProfitAtual * 4.0 : 1000.0;
       if (spl >= 0) {
          sPct = (g_TakeProfitAtual > 0) ? MathMin(1.0, spl / g_TakeProfitAtual) : 0;
       } else {
-         sPct = -1.0 * MathMin(1.0, MathAbs(spl) / softStopLimitS);
+         sPct = -1.0 * MathMin(1.0, MathAbs(spl) / sgRefLimitS);
       }
       color barFillSelPos = CLR_TEAL;
       color barFillSelNeg = CLR_RED;
@@ -4219,7 +4336,7 @@ void DesenharPainel() {
    }
 
    // Grade inferior Sell — Vendas sempre na paleta Vermelha/Laranja
-   bool isSelLimGrd = ((g_SellLucro+g_SellSwap) < -g_SoftStopPorCesto);
+   bool isSelLimGrd = (g_SGBloqueado && g_SellTotal > 0 && (g_SellLucro+g_SellSwap) < 0);
    color selGradeClr = isSelLimGrd ? CLR_RED : (g_SellTotal >= InpMaxOrdens-1 ? C'255,100,50' : C'180,60,60');
    PLabel("sel_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
    PGradeBar("sel_grade",lx+46,cur,thm_w-118,10,InpMaxOrdens,g_SellTotal,selGradeClr,C'24,14,14');
@@ -5188,10 +5305,14 @@ void EnviarDadosWeb() {
    body += "\"balance\":" + DoubleToString(bal, 2) + ",";
    body += "\"equity\":" + DoubleToString(eq, 2) + ",";
    body += "\"reserveFund\":" + DoubleToString(fundoRes, 2) + ",";
+   body += "\"reserveCapPct\":" + DoubleToString(InpTetoFundoReservaPct, 2) + ",";
    body += "\"reserveCutsCount\":" + IntegerToString(ObterCortesCount()) + ",";
    body += "\"reserveCutsGasto\":" + DoubleToString(ObterCortesGasto(), 2) + ",";
-   body += "\"reserveCapPct\":" + DoubleToString(InpTetoFundoReservaPct, 2) + ",";
-   body += "\"softStopLimit\":" + DoubleToString(g_SoftStopAtual, 2) + ",";
+   body += "\"sgScore\":"      + DoubleToString(g_SGScoreAtual, 1)  + ",";
+   body += "\"sgScoreMin\":"   + DoubleToString(g_SGScoreMinimo, 1) + ",";
+   body += "\"sgDistMultipl\":" + DoubleToString(g_SGDistMultipl, 3) + ",";
+   body += "\"sgLoteFator\":"  + DoubleToString(g_SGLoteFator, 3)   + ",";
+   body += "\"sgBloqueado\":"  + (g_SGBloqueado ? "true" : "false")  + ",";
    body += "\"loteBase\":" + DoubleToString(g_LoteBase, 3) + ",";
    body += "\"takeProfitLimit\":" + DoubleToString(g_TakeProfitAtual, 2) + ",";
    // BUG #7: brlRate compensando o fator centavo (multiplicando por 100 se for conta padrão)
@@ -5545,7 +5666,6 @@ void FecharTudo() {
    g_BuyNivelAtual       = 0;   // [BUG #4 FIX]
    g_SellNivelAtual      = 0;   // [BUG #4 FIX]
    g_DD_FaseAtual        = 0;
-   g_SS_FaseAtual        = 0;
    
    // [FIX DADOS ANTIGOS] Zera contadores de lucro imediatamente (painel mostra 0 na hora)
    g_HistLucroGlobal   = 0;
@@ -5621,7 +5741,6 @@ void FecharLocal() {
    g_BuyNivelAtual       = 0;   // [BUG #4 FIX]
    g_SellNivelAtual      = 0;   // [BUG #4 FIX]
    g_DD_FaseAtual        = 0;
-   g_SS_FaseAtual        = 0;
    
    // Definir data de reset local
    g_InicioHistoricoSymbol = TimeCurrent();
@@ -6032,7 +6151,7 @@ void DesenharPainelReserva(int x, int y, int &outHeight) {
    double gasto = ObterCortesGasto();
    PRow8(pfx+"r_cortes_qtd", lx2, rx2, cur, "Defesas / Cortes:", IntegerToString(cortes) + " vezes", CLR_TXT_LABEL); cur+=14;
    PRow8(pfx+"r_cortes_gasto", lx2, rx2, cur, "Total Queimado:", FormatBRL(UscToBrl(gasto)) + " (" + DoubleToString(gasto, 1) + " USC)", CLR_TXT_LABEL); cur+=14;
-
+   
    if(InpTetoFundoReservaPct > 0.0 && tetoUsc > 0.0) {
       double pctFill = fundoVal / tetoUsc;
       PBar(pfx+"bar_fundo", lx2, cur, pw2-(pad2*2)-8, 8, pctFill, CLR_LINE_SOFT, CLR_PURPLE); cur+=16;
@@ -6574,4 +6693,3 @@ void EnviarResumoPush() {
 //  FIM — Orion_Hedge.mq5
 //  MODO HEDGE: 2 Cestos Simultaneos — USE SO EM DEMO/TESTADOR
 //+------------------------------------------------------------------+
-
