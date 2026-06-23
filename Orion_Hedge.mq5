@@ -158,7 +158,7 @@ input bool             InpAtivarSmartTrimming     = true;       // Ativar Reduç
 input double           InpTrimmingTriggerDD       = 15.0;       // Ativar corte se Drawdown Geral passar de %
 input double           InpMaxPMDriftPips          = 150.0;      // Distância Máxima (pips) que o PM pode afastar
 input double           InpRetencaoFundoReserva    = 20.0;       // % de lucro retido de ciclos normais para o fundo
-input double           InpMaxCortePorCiclo        = 0.50;       // Fator máximo de queima do lucro por tentativa
+input double           InpMaxCortePorCiclo        = 0.05;       // Fator máximo de queima do lucro por tentativa
 input double           InpMinMarginLevelEmergency = 150.0;      // Nivel minimo de margem livre para corte de emergencia (%)
 input double           InpCargaInicialGlobal      = 3.0;        // % do L.Global usado como carga inicial do fundo no OnInit
 input double           InpTetoFundoReservaPct     = 5.0;        // Teto máximo do fundo (% do saldo). 0 = sem teto
