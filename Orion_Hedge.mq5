@@ -1380,10 +1380,9 @@ double CalcularSmartGateScore() {
    scoreConta -= dd_pct * 150.0;
 
    // DD global da conta (balance vs equity) — enxerga perdas realizadas
-   double equity    = AccountInfoDouble(ACCOUNT_EQUITY);
-   double balanceTot= AccountInfoDouble(ACCOUNT_BALANCE);
-   double dd_global_pct = (balanceTot > 0 && equity < balanceTot)
-                          ? (balanceTot - equity) / balanceTot
+   double equity        = AccountInfoDouble(ACCOUNT_EQUITY);
+   double dd_global_pct = (balance > 0 && equity < balance)
+                          ? (balance - equity) / balance
                           : 0.0;
    scoreConta -= dd_global_pct * 150.0;
 
