@@ -298,6 +298,13 @@ int      g_ReservaPanelHeight  = 230;
 bool     g_AirbagForceConfirmar= false;
 datetime g_AirbagForceTimestamp= 0;
 
+// === MINI PAINEL SMART GATE INFO ===
+bool     g_SGInfoAberto        = false;
+double   g_SGScoreConta        = 100.0;
+double   g_SGScoreMercado      = 100.0;
+double   g_SGScoreGrade        = 100.0;
+double   g_SGScoreAdapt        = 100.0;
+
 
 void SetBuySaidaZeroAtiva(bool val) {
    g_BuySaidaZeroAtiva = val;
@@ -673,6 +680,8 @@ void DesenharPainel();
 void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight);
 void DesenharPainelReserva(int x, int y, int &outHeight);
 void LimparPainelReserva();
+void DesenharPainelSGInfo(int x, int y);
+void LimparPainelSGInfo();
 void DesenharLinhas();
 void LimparLinhasAnalise();
 void DesenharLinhasAnalise();
@@ -3928,7 +3937,7 @@ void DesenharPainel() {
     string sFundoLabel = fundoBaixo ? "F. RESERVA !" : "F. RESERVA";
 
      PLabel("lbl_fundo_l", lx, cur+2, sFundoLabel, CLR_TXT_DIM, 8);
-     PButton("btn_fundo_res", lx + 78, cur, 25, 14, g_ReservaPanelAberto ? "X" : "VER", CLR_BG_CARD, g_ReservaPanelAberto ? CLR_AMBER : CLR_TXT_LABEL);
+     PButton("btn_fundo_res", lx + 78, cur, 16, 14, g_ReservaPanelAberto ? "X" : "?", CLR_BG_CARD, g_ReservaPanelAberto ? CLR_AMBER : CLR_PURPLE);
      PLabelR("lbl_fundo_brl", lx + 160, cur+2, FormatBRL(fundoRes * fatBRL), CLR_TXT_DIM, 8);
      PLabelR("lbl_fundo_usc", rx - 55, cur+1, FormatUSC(fundoRes, false) + " USC", clrFundo, 10, true);
      PLabelR("lbl_fundo_pct", rx - 2, cur+2, sPctFundo, clrFundo, 8);
@@ -4073,6 +4082,7 @@ void DesenharPainel() {
    double pct_sg = MathMin(1.0, g_SGScoreAtual / 100.0);
    color sg_clr  = g_SGBloqueado ? C'255,82,82' : (g_SGScoreAtual < 60.0 ? CLR_AMBER : C'0,200,83');
    PLabel("lbl_ss_l",lx,cur,"SMART GATE SCORE",CLR_TXT_DIM,8);
+   PButton("btn_sg_info", lx + 105, cur - 1, 16, 14, g_SGInfoAberto ? "X" : "?", CLR_BG_CARD, g_SGInfoAberto ? CLR_AMBER : CLR_PURPLE);
    PLabelR("lbl_ss_v",rx-2,cur,DoubleToString(g_SGScoreAtual,0)+" / "+DoubleToString(g_SGScoreMinimo,0)+" min",CLR_TXT_PRIMARY,10,true); cur+=14;
    int szw1 = (int)MathRound(0.50 * thm_w);
    int szw2 = (int)MathRound(0.30 * thm_w);
@@ -6200,6 +6210,102 @@ void LimparPainelReserva() {
    }
 }
 
+void DesenharPainelSGInfo(int x, int y) {
+   string pfx = "sg_";
+   if(!g_SGInfoAberto) {
+      LimparPainelSGInfo();
+      return;
+   }
+
+   int pw2 = 260, pad2 = 10;
+   int lx2 = x + pad2 + 4, rx2 = x + pw2 - pad2;
+   int cur = y;
+   int panelHeight = 295;
+
+   PRect(pfx+"border", x-1, cur-1, pw2+2, panelHeight+2, CLR_LINE_HARD, CLR_LINE_HARD, 198);
+   PRect(pfx+"bg",      x,   cur,   pw2,   panelHeight,   CLR_BG_BASE, -1, 199);
+
+   //=================================================== HEADER
+   PRect(pfx+"hdr_bg",  x, cur, pw2, 32, CLR_BG_HEADER, -1, 200);
+   PRect(pfx+"hdr_top", x, cur, pw2, 2, CLR_PURPLE, -1, 201); cur+=2;
+   PLabel(pfx+"hdr_title", x+pad2, cur+6, "SMART GATE — O QUE SIGNIFICA?", CLR_TXT_PRIMARY, 8, true);
+   
+   string statusTxt = g_SGBloqueado ? "BLOQUEADO" : "LIBERADO";
+   color statusClr = g_SGBloqueado ? CLR_RED : C'0,200,83';
+   PLabel(pfx+"hdr_status", x+pad2, cur+19, "Status: " + statusTxt, statusClr, 7, true);
+   PButton(pfx+"btn_x", x+pw2-22, cur+5, 18, 18, "X", CLR_BG_CARD, CLR_TXT_LABEL);
+   cur+=32+6;
+
+   //=================================================== SCORE ATUAL
+   PSect(pfx+"sec_score", x, cur, pw2, "SCORE ATUAL", CLR_PURPLE); cur+=16;
+   
+   PRow8(pfx+"r_score", lx2, rx2, cur, "Score / Mínimo:", DoubleToString(g_SGScoreAtual, 1) + " / " + DoubleToString(g_SGScoreMinimo, 1), CLR_TXT_PRIMARY); cur+=14;
+   
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   double pnlTotal = 0;
+   for(int i = 0; i < PositionsTotal(); i++) {
+      ulong tk = PositionGetTicket(i);
+      if(!PositionSelectByTicket(tk)) continue;
+      long mag = PositionGetInteger(POSITION_MAGIC);
+      if(mag < InpMagicNumberBase || mag > InpMagicNumberBase + 999999) continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      pnlTotal += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+   }
+   double dd_pct = (balance > 0) ? (MathMax(0.0, -pnlTotal) / balance) * 100.0 : 0.0;
+   
+   PRow8(pfx+"r_dd", lx2, rx2, cur, "Drawdown par:", DoubleToString(dd_pct, 1) + "% da banca em DD", CLR_TXT_LABEL); cur+=14;
+   
+   string distTxt = DoubleToString(g_SGDistMultipl, 2) + "x";
+   if(g_SGDistMultipl <= 1.001) distTxt += "  (normal)";
+   else distTxt += "  (ampliado)";
+   PRow8(pfx+"r_dist", lx2, rx2, cur, "Distância grade:", distTxt, CLR_TXT_LABEL); cur+=14;
+   
+   string loteTxt = DoubleToString(g_SGLoteFator * 100.0, 0) + "%";
+   if(g_SGLoteFator >= 0.99) loteTxt += "  (lote cheio)";
+   else loteTxt += "  (reduzido)";
+   PRow8(pfx+"r_lote", lx2, rx2, cur, "Fator de lote:", loteTxt, CLR_TXT_LABEL); cur+=14;
+
+   //=================================================== AS 4 CAMADAS
+   PSect(pfx+"sec_layers", x, cur, pw2, "AS 4 CAMADAS DE ANÁLISE", CLR_BLUE); cur+=16;
+   
+   PRow8(pfx+"r_c1", lx2, rx2, cur, "C — Conta (saude $):", DoubleToString(g_SGScoreConta, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_c2", lx2, rx2, cur, "M — Mercado (spread/ATR):", DoubleToString(g_SGScoreMercado, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_c3", lx2, rx2, cur, "G — Grade (nivel/lote):", DoubleToString(g_SGScoreGrade, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_c4", lx2, rx2, cur, "T — Temporal (tempo em DD):", DoubleToString(g_SGScoreAdapt, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
+
+   //=================================================== O QUE ESTÁ ACONTECENDO
+   PSect(pfx+"sec_desc", x, cur, pw2, "O QUE ESTÁ ACONTECENDO?", CLR_AMBER); cur+=16;
+   
+   string descTxt = "Tudo ok — operando normalmente.";
+   color descClr = C'0,200,83';
+   if(g_SGBloqueado) {
+      descTxt = "Bloqueado — DD alto ou risco elevado.";
+      descClr = CLR_RED;
+   } else if(g_SGScoreAtual < 60.0) {
+      descTxt = "Atenção — risco moderado, grade alerta.";
+      descClr = CLR_AMBER;
+   } else if(g_SGLoteFator < 1.0 || g_SGDistMultipl > 1.0) {
+      descTxt = "Adaptativo — grade defensiva ativa.";
+      descClr = CLR_BLUE;
+   }
+   
+   PLabel(pfx+"desc_txt", lx2, cur, descTxt, descClr, 8, true);
+   cur+=14;
+
+   cur+=4;
+   panelHeight = cur - y;
+   ObjectSetInteger(0, PANEL_PREFIX+pfx+"border", OBJPROP_YSIZE, panelHeight+2);
+   ObjectSetInteger(0, PANEL_PREFIX+pfx+"bg",     OBJPROP_YSIZE, panelHeight);
+}
+
+void LimparPainelSGInfo() {
+   string pfx = "sg_";
+   for(int i=ObjectsTotal(0,0,-1)-1;i>=0;i--) {
+      string nm=ObjectName(0,i,0,-1);
+      if(StringFind(nm,PANEL_PREFIX+pfx)==0 || StringFind(nm,PANEL_PREFIX+"R_"+pfx)==0) ObjectDelete(0,nm);
+   }
+}
+
 //===================================================================
 // CLICK EVENTS
 //===================================================================
@@ -6222,6 +6328,14 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
       if(sp == PANEL_PREFIX + "btn_fundo_res") {
          g_ReservaPanelAberto = !g_ReservaPanelAberto;
          if(!g_ReservaPanelAberto) LimparPainelReserva();
+         DesenharPainel(); ChartRedraw(0);
+         return;
+      }
+      
+      // Botão Smart Gate Info no painel principal — abre/fecha
+      if(sp == PANEL_PREFIX + "btn_sg_info" || sp == PANEL_PREFIX + "sg_btn_x") {
+         g_SGInfoAberto = !g_SGInfoAberto;
+         if(!g_SGInfoAberto) LimparPainelSGInfo();
          DesenharPainel(); ChartRedraw(0);
          return;
       }
