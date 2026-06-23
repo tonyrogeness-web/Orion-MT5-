@@ -3917,7 +3917,8 @@ void DesenharPainel() {
     cur += 16;
     
     // 5. L. GLOBAL
-    double pct_hist = (balance > 0) ? (g_HistLucroGlobal / balance * 100.0) : 0.0;
+    double start_balance = balance - g_HistLucroGlobal;
+    double pct_hist = (start_balance > 0) ? (g_HistLucroGlobal / start_balance * 100.0) : 0.0;
     string sPctHist = (pct_hist >= 0 ? "+" : "") + DoubleToString(pct_hist, 2) + "%";
     color clrHist = (g_HistLucroGlobal >= 0) ? C'0,200,83' : C'255,82,82';
     
@@ -3929,7 +3930,7 @@ void DesenharPainel() {
     
     // 6. L. LÍQUIDO
     double lucroLiquido = g_HistLucroGlobal + global_total;
-    double pct_liq = (balance > 0) ? (lucroLiquido / balance * 100.0) : 0.0;
+    double pct_liq = (start_balance > 0) ? (lucroLiquido / start_balance * 100.0) : 0.0;
     string sPctLiq = (pct_liq >= 0 ? "+" : "") + DoubleToString(pct_liq, 2) + "%";
     color clrLiq = (lucroLiquido >= 0) ? C'0,200,83' : C'255,82,82';
     
@@ -6776,11 +6777,12 @@ void EnviarResumoPush() {
    
    // Lucro de hoje sincronizado com o painel gráfico
    double lucroHoje = g_HistLucroHoje;
+   double start_balance_telemetry = balance - g_HistLucroGlobal;
    double pctHoje = (balance > 0) ? (lucroHoje / balance * 100.0) : 0.0;
    
    // Lucro Global Acumulado sincronizado com o painel gráfico
    double lucroGlobalTotal = g_HistLucroGlobal;
-   double pctGlobalTotal = (balance > 0) ? (lucroGlobalTotal / balance * 100.0) : 0.0;
+   double pctGlobalTotal = (start_balance_telemetry > 0) ? (lucroGlobalTotal / start_balance_telemetry * 100.0) : 0.0;
    
    // Variação percentual do Patrimônio Líquido (Equity) sobre o Saldo
    double pct_patrimonio = (balance > 0) ? ((equity - balance) / balance * 100.0) : 0.0;
