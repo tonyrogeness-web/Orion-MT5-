@@ -363,6 +363,32 @@ void DefinirCortesGasto(double val) {
    GlobalVariableSet(varName, val);
 }
 
+int ObterHPCortesCount() {
+   string varName = "OrionHedge_HPCount_" + _Symbol;
+   if(GlobalVariableCheck(varName)) {
+      return (int)GlobalVariableGet(varName);
+   }
+   return 0;
+}
+
+void DefinirHPCortesCount(int val) {
+   string varName = "OrionHedge_HPCount_" + _Symbol;
+   GlobalVariableSet(varName, val);
+}
+
+double ObterHPCortesGasto() {
+   string varName = "OrionHedge_HPGasto_" + _Symbol;
+   if(GlobalVariableCheck(varName)) {
+      return GlobalVariableGet(varName);
+   }
+   return 0.0;
+}
+
+void DefinirHPCortesGasto(double val) {
+   string varName = "OrionHedge_HPGasto_" + _Symbol;
+   GlobalVariableSet(varName, val);
+}
+
 void RegistrarLucroCiclo(double lucro) {
    if(InpAtivarSmartTrimming && lucro > 0.0 && InpRetencaoFundoReserva > 0.0) {
       double balance = AccountInfoDouble(ACCOUNT_BALANCE);
@@ -1227,8 +1253,16 @@ void ExecutarHedgeParcial(bool isBuyWin, double maxGasto) {
          double varredura = MathFloor(fatorVolume) * minLot;
          if(varredura >= minLot) {
             double volParaFechar = MathMin(varredura, worstVol);
-            AddLog("[SOS] Queimando "+DoubleToString(maxGasto,2)+" USC do lucro para abater "+DoubleToString(volParaFechar,3)+" lotes da pior pos. do hedge!");
-            trade.PositionClosePartial(worstTicket, volParaFechar);
+            double realLoss = MathAbs(worstProfit) * (volParaFechar / worstVol);
+            AddLog("[SOS] Queimando "+DoubleToString(maxGasto,2)+" USC do lucro para abater "+DoubleToString(volParaFechar,3)+" lotes da pior pos. do hedge! Custo estimado: "+DoubleToString(realLoss, 2));
+            if(trade.PositionClosePartial(worstTicket, volParaFechar)) {
+               uint rc = trade.ResultRetcode();
+               if(rc == TRADE_RETCODE_DONE || rc == TRADE_RETCODE_PLACED) {
+                  DefinirHPCortesCount(ObterHPCortesCount() + 1);
+                  DefinirHPCortesGasto(ObterHPCortesGasto() + realLoss);
+                  AddLog("[HEDGE PARCIAL] Corte realizado com sucesso. Novo total de cortes: " + IntegerToString(ObterHPCortesCount()));
+               }
+            }
          }
       }
    }
@@ -5350,6 +5384,8 @@ void EnviarDadosWeb() {
    body += "\"reserveCapPct\":" + DoubleToString(InpTetoFundoReservaPct, 2) + ",";
    body += "\"reserveCutsCount\":" + IntegerToString(ObterCortesCount()) + ",";
    body += "\"reserveCutsGasto\":" + DoubleToString(ObterCortesGasto(), 2) + ",";
+   body += "\"hpCutsCount\":" + IntegerToString(ObterHPCortesCount()) + ",";
+   body += "\"hpCutsGasto\":" + DoubleToString(ObterHPCortesGasto(), 2) + ",";
    body += "\"sgScore\":"      + DoubleToString(g_SGScoreAtual, 1)  + ",";
    body += "\"sgScoreMin\":"   + DoubleToString(g_SGScoreMinimo, 1) + ",";
    body += "\"sgDistMultipl\":" + DoubleToString(g_SGDistMultipl, 3) + ",";
@@ -6857,7 +6893,7 @@ void DesenharPainelDefesaInfo(int x, int y) {
    int pw2 = 260, pad2 = 10;
    int lx2 = x + pad2 + 4, rx2 = x + pw2 - pad2;
    int cur = y;
-   int panelHeight = 280;
+   int panelHeight = 310;
 
    PRect(pfx+"border", x-1, cur-1, pw2+2, panelHeight+2, CLR_LINE_HARD, CLR_LINE_HARD, 198);
    PRect(pfx+"bg",      x,   cur,   pw2,   panelHeight,   CLR_BG_BASE, -1, 199);
@@ -6889,6 +6925,11 @@ void DesenharPainelDefesaInfo(int x, int y) {
    string sellHpStatus = (g_SellTotal >= InpNivelHedgeParcial) ? "ATIVO (N" + IntegerToString(g_SellTotal) + ")" : "Aguardando";
    color sellHpClr = (g_SellTotal >= InpNivelHedgeParcial) ? CLR_AMBER : CLR_TXT_DIM;
    PRow8(pfx+"r_hp_sell", lx2, rx2, cur, "Cesto Sell:", sellHpStatus, sellHpClr); cur+=14;
+
+   int hpCortes = ObterHPCortesCount();
+   double hpGasto = ObterHPCortesGasto();
+   PRow8(pfx+"r_hp_cortes", lx2, rx2, cur, "Defesas / Cortes:", IntegerToString(hpCortes) + " vezes", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_hp_gasto", lx2, rx2, cur, "Total Queimado:", FormatBRL(UscToBrl(hpGasto)) + " (" + DoubleToString(hpGasto, 1) + " USC)", CLR_TXT_LABEL); cur+=14;
 
    //=================================================== BREAK EVEN
    PSect(pfx+"sec_be", x, cur, pw2, "BREAK EVEN DINÂMICO (ALT 2)", CLR_BLUE); cur+=16;
