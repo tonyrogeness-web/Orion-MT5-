@@ -6222,8 +6222,6 @@ void DesenharPainelReserva(int x, int y, int &outHeight) {
    
    string tetoStr = (InpTetoFundoReservaPct > 0.0) ? (FormatBRL(UscToBrl(tetoUsc)) + " (" + DoubleToString(InpTetoFundoReservaPct, 1) + "%)") : "ILIMITADO";
    PRow8(pfx+"r_teto", lx2, rx2, cur, "Teto do Fundo:", tetoStr, CLR_TXT_LABEL); cur+=14;
-   PRow8(pfx+"r_ret", lx2, rx2, cur, "Retenção p/ Ciclo:", DoubleToString(InpRetencaoFundoReserva, 1) + "% do Lucro", CLR_TXT_LABEL); cur+=14;
-   PRow8(pfx+"r_carga_cfg", lx2, rx2, cur, "Carga Inicial Config:", DoubleToString(InpCargaInicialGlobal, 1) + "% L.Global", CLR_TXT_LABEL); cur+=14;
    
    int cortes = ObterCortesCount();
    double gasto = ObterCortesGasto();
