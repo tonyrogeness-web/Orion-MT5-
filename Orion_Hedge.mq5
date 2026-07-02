@@ -1,11 +1,11 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                           Orion_Hedge.mq5                       |
-//|  ORION HEDGE — Grade COMPRA + VENDA Simultaneas (2 Cestos)       |
-//|  v3.40 HEDGE — TP Bidirecional | Cooldown | Validacao de Simbolo  |
+//|  ORION HEDGE â€” Grade COMPRA + VENDA Simultaneas (2 Cestos)       |
+//|  v3.40 HEDGE â€” TP Bidirecional | Cooldown | Validacao de Simbolo  |
 //+------------------------------------------------------------------+
 #property copyright "Orion Logic Elite"
 #property version   "3.40"
-#property description "Orion Hedge v3.40 — Fix Base Ciclo Desatualizada | Taxa BRL 5.88"
+#property description "Orion Hedge v3.40 â€” Fix Base Ciclo Desatualizada | Taxa BRL 5.88"
 
 #include <Trade\Trade.mqh>
 
@@ -37,7 +37,7 @@ int ShellExecuteW(int hwnd, string lpOperation, string lpFile, string lpParamete
 #define CLR_PURPLE       C'140,80,220'
 
 //===================================================================
-// INPUTS Ã¢â‚¬â€ MODO HEDGE SOBREVIVENCIA (Resistente a Tendencias)
+// INPUTS ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â MODO HEDGE SOBREVIVENCIA (Resistente a Tendencias)
 //===================================================================
 input group "=== TIMEFRAMES ==="
 input ENUM_TIMEFRAMES InpBaseTF    = PERIOD_H1;
@@ -108,11 +108,11 @@ input bool   InpAtivarHedgeParcial = true;   // Alt 1: Usar lucro para fechar a 
 input int    InpNivelHedgeParcial  = 5;      // Alt 1: Ativar quando cesto oposto tiver N recompras [v3.27: 4->5]
 input double InpFatorLucroHedge    = 0.50;   // Alt 1: Queimar ate 50% do lucro na ordem ruim
 
-input group "=== CICLO DE EQUITY AUTOMÁTICO ==="
-input bool   InpAtivarCicloEquity      = true;  // Ativar Ciclo de P. Líquido (Realizado)
-input double InpMetaCicloEquityPct     = 5.0;   // Meta de Lucro Líquido Real (%)
-input bool   InpAutoResetCiclo         = true;  // Reiniciar Automático (sem pausar EA)
-input int    InpCooldownCicloMinutos   = 5;     // Cooldown pós-fechamento (Minutos)
+input group "=== CICLO DE EQUITY AUTOMÃTICO ==="
+input bool   InpAtivarCicloEquity      = true;  // Ativar Ciclo de P. LÃ­quido (Realizado)
+input double InpMetaCicloEquityPct     = 5.0;   // Meta de Lucro LÃ­quido Real (%)
+input bool   InpAutoResetCiclo         = true;  // Reiniciar AutomÃ¡tico (sem pausar EA)
+input int    InpCooldownCicloMinutos   = 5;     // Cooldown pÃ³s-fechamento (Minutos)
 
 input group "=== SMART TARGET (META DINAMICA DO CICLO POR DD) ==="
 input bool   InpSTHabilitado        = true;   // Ativar Smart Target
@@ -125,13 +125,13 @@ input double InpSTDDPressao         = 15.0;   // DD% inicio zona pressao
 input double InpSTDDCritico         = 30.0;   // DD% inicio zona critica
 input double InpSTDDSobreviv        = 38.0;   // DD% inicio zona sobrevivencia
 
-input group "=== SMART GATE RECALIBRACAO (PASSO 2 — ATIVAR APOS CICLO FECHAR) ==="
+input group "=== SMART GATE RECALIBRACAO (PASSO 2 â€” ATIVAR APOS CICLO FECHAR) ==="
 input bool   InpSGRecalibHabilitado = true;   // Ativar nova escala Smart Gate (false = usa escala antiga)
 
-input group "=== SOS SIMPLIFICADO (PASSO 4 — ATIVAR APOS SMART ESCAPE ESTAVEL) ==="
+input group "=== SOS SIMPLIFICADO (PASSO 4 â€” ATIVAR APOS SMART ESCAPE ESTAVEL) ==="
 input bool   InpSOSSimplificado     = true;   // Usar painel SOS simplificado (3 botoes apenas)
 
-input group "=== SMART ESCAPE (PASSO 3 — ATIVAR APOS SG TESTADO 1 SEMANA) ==="
+input group "=== SMART ESCAPE (PASSO 3 â€” ATIVAR APOS SG TESTADO 1 SEMANA) ==="
 input bool   InpSEHabilitado        = true;   // Ativar Smart Escape
 input bool   InpSEFase1Habilitado   = true;   // Ativar Fase 1 (DD 30-38%)
 input bool   InpSEFase2Habilitado   = true;   // Ativar Fase 2 (DD > 38%)
@@ -178,14 +178,14 @@ input int              InpADX_Periodo             = 14;         // Periodo do AD
 input double           InpADX_TrendThreshold      = 30.0;       // ADX acima disso = tendencia forte confirmada
 
 input group "=== SMART GRID TRIMMING (AIRBAG) ==="
-input bool             InpAtivarSmartTrimming     = true;       // Ativar Redução Automática de Lotes (Airbag)
+input bool             InpAtivarSmartTrimming     = true;       // Ativar ReduÃ§Ã£o AutomÃ¡tica de Lotes (Airbag)
 input double           InpTrimmingTriggerDD       = 15.0;       // Ativar corte se Drawdown Geral passar de %
-input double           InpMaxPMDriftPips          = 150.0;      // Distância Máxima (pips) que o PM pode afastar
+input double           InpMaxPMDriftPips          = 150.0;      // DistÃ¢ncia MÃ¡xima (pips) que o PM pode afastar
 input double           InpRetencaoFundoReserva    = 20.0;       // % de lucro retido de ciclos normais para o fundo
-input double           InpMaxCortePorCiclo        = 0.05;       // Fator máximo de queima do lucro por tentativa
+input double           InpMaxCortePorCiclo        = 0.05;       // Fator mÃ¡ximo de queima do lucro por tentativa
 input double           InpMinMarginLevelEmergency = 150.0;      // Nivel minimo de margem livre para corte de emergencia (%)
 input double           InpCargaInicialGlobal      = 3.0;        // % do L.Global usado como carga inicial do fundo no OnInit
-input double           InpTetoFundoReservaPct     = 5.0;        // Teto máximo do fundo (% do saldo). 0 = sem teto
+input double           InpTetoFundoReservaPct     = 5.0;        // Teto mÃ¡ximo do fundo (% do saldo). 0 = sem teto
 input double           InpVelocidadeDD_Pct        = 8.0;        // DD cresceu X% em 60s = flash crash (cooldown cai p/ 3s)
 
 input group "=== INTEGRACAO WEB ORION HEDGE ==="
@@ -195,7 +195,7 @@ input string InpWebApiKey           = "aura_secret_token_123456"; // Token de Se
 input int    InpWebIntervalo        = 30;        // Intervalo de envio em segundos
 
 //===================================================================
-// VARIAVEIS Ã¢â‚¬â€  DOIS CESTOS SIMULTANEOS
+// VARIAVEIS ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬  DOIS CESTOS SIMULTANEOS
 //===================================================================
 CTrade   trade;
 int      handleATR, handleEMA, handleATR_Long = INVALID_HANDLE;
@@ -243,12 +243,12 @@ double   g_ADX_Value        = 0.0;
 // Estado do Trailing de Patrimonio (Mantido para compatibilidade com Dashboard Web)
 bool     g_DD_Reached10        = false;  // Indica se o DD bateu 10% (Amarelo)
 bool     g_DD_Reached20        = false;  // Indica se o DD bateu 20% (Vermelho)
-bool     g_TrailingActive      = false;  // Indica se o trailing está ativo no ciclo atual
-double   g_PeakProfit          = -999.0; // Pico de lucro alcançado no trailing
+bool     g_TrailingActive      = false;  // Indica se o trailing estÃ¡ ativo no ciclo atual
+double   g_PeakProfit          = -999.0; // Pico de lucro alcanÃ§ado no trailing
 
-// Estado do Ciclo de Equity Automático
-double   g_EquityCycleBaseBalance = -1.0;   // Saldo de referÃªncia inicial do ciclo
-datetime g_EquityCycleCooldownEnd = 0;      // Fim do perÃ­odo de cooldown do ciclo
+// Estado do Ciclo de Equity AutomÃ¡tico
+double   g_EquityCycleBaseBalance = -1.0;   // Saldo de referÃƒÂªncia inicial do ciclo
+datetime g_EquityCycleCooldownEnd = 0;      // Fim do perÃƒÂ­odo de cooldown do ciclo
 
 // === CONTROLE DE COMANDOS EXECUTADOS ===
 int      g_ExecCmdIds[];
@@ -296,7 +296,7 @@ double   g_ADX_Trend     = 0;
 double   g_DIPlus_Trend  = 0;
 double   g_DIMinus_Trend = 0;
 
-// === SAÍDA ZERO A ZERO (GRADE) ===
+// === SAÃDA ZERO A ZERO (GRADE) ===
 bool     g_BuySaidaZeroAtiva  = false;
 bool     g_SellSaidaZeroAtiva = false;
 
@@ -476,13 +476,13 @@ double SimularNovoPM(bool isBuy, ulong ticketParaCortar, double loteParaCortar) 
 void ProcessarSmartTrimming(bool forcar=false) {
    if(!InpAtivarSmartTrimming && !forcar) return;
 
-   // 1. Calcula Drawdown e Nível de Margem
+   // 1. Calcula Drawdown e NÃ­vel de Margem
    double ddRobo = MathAbs(MathMin(0.0, (g_BuyLucro+g_BuySwap) + (g_SellLucro+g_SellSwap)));
    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
    double ddPercent = (balance > 0.0) ? (ddRobo / balance) * 100.0 : 0.0;
    double marginLevel = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
 
-   // 2. Verifica se está em estado de estresse
+   // 2. Verifica se estÃ¡ em estado de estresse
    bool stressDD     = (ddPercent >= InpTrimmingTriggerDD);
    bool stressSobrev = (ddPercent >= InpTrimmingTriggerDD + 8.0);
    bool stressMargin = (marginLevel > 0.0 && marginLevel < InpMinMarginLevelEmergency);
@@ -517,7 +517,7 @@ void ProcessarSmartTrimming(bool forcar=false) {
       if(agora - lastTrimmingTime < cooldownSeg) return;
    }
 
-   // 3. Determina qual cesto está em pior situação (maior prejuízo flutuante)
+   // 3. Determina qual cesto estÃ¡ em pior situaÃ§Ã£o (maior prejuÃ­zo flutuante)
    bool targetIsBuy = true;
    double buyPnL = g_BuyTotal > 0 ? (g_BuyLucro + g_BuySwap) : 0.0;
    double sellPnL = g_SellTotal > 0 ? (g_SellLucro + g_SellSwap) : 0.0;
@@ -534,7 +534,7 @@ void ProcessarSmartTrimming(bool forcar=false) {
 
    int targetMagic = targetIsBuy ? g_MagicBuy : g_MagicSell;
 
-   // 4. Encontra a pior posição desse cesto
+   // 4. Encontra a pior posiÃ§Ã£o desse cesto
    ulong worstTicket = 0;
    double worstProfit = 0;
    double worstVol = 0;
@@ -557,13 +557,13 @@ void ProcessarSmartTrimming(bool forcar=false) {
 
    if(worstTicket == 0 || worstProfit >= 0 || worstVol <= 0.0001) return;
 
-   // 5. Calcula o custo por lote mínimo
+   // 5. Calcula o custo por lote mÃ­nimo
    double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
    if(minLot <= 0) minLot = 0.01;
    double custoPorMinLot = MathAbs(worstProfit) / (worstVol / minLot);
    if(custoPorMinLot <= 0) return;
 
-   // 6. Define o orçamento máximo de queima (maxGasto)
+   // 6. Define o orÃ§amento mÃ¡ximo de queima (maxGasto)
    double fundoDisponivel = ObterFundoReserva();
    double maxGasto = fundoDisponivel;
    double capGasto = InpMaxCortePorCiclo * balance;
@@ -585,14 +585,14 @@ void ProcessarSmartTrimming(bool forcar=false) {
 
    if(maxGasto < custoPorMinLot) return;
 
-   // 7. Calcula volume teórico de corte
+   // 7. Calcula volume teÃ³rico de corte
    double fatorVolume = (maxGasto + 0.0001) / custoPorMinLot;
    double volParaFechar = MathFloor(fatorVolume) * minLot;
    volParaFechar = MathMin(volParaFechar, worstVol);
 
    if(volParaFechar < minLot) return;
 
-   // 8. PM Drift Guard: Simulação e Validação
+   // 8. PM Drift Guard: SimulaÃ§Ã£o e ValidaÃ§Ã£o
    double PM_atual = targetIsBuy ? g_BuyPrecoMedio : g_SellPrecoMedio;
    double price = targetIsBuy ? SymbolInfoDouble(_Symbol, SYMBOL_BID) : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double driftAtual = MathAbs(PM_atual - price);
@@ -601,7 +601,7 @@ void ProcessarSmartTrimming(bool forcar=false) {
    while(volParaFechar >= minLot) {
       double PM_simulado = SimularNovoPM(targetIsBuy, worstTicket, volParaFechar);
       if(PM_simulado <= 0) {
-         // O cesto seria totalmente zerado. Isso é perfeitamente seguro!
+         // O cesto seria totalmente zerado. Isso Ã© perfeitamente seguro!
          break;
       }
       double driftSimulado = MathAbs(PM_simulado - price);
@@ -611,14 +611,14 @@ void ProcessarSmartTrimming(bool forcar=false) {
          // Volume seguro encontrado!
          break;
       }
-      // Se afasta demais, tenta reduzir uma fração menor
+      // Se afasta demais, tenta reduzir uma fraÃ§Ã£o menor
       volParaFechar -= minLot;
    }
 
    if(volParaFechar < minLot) {
       static datetime lastDriftLog = 0;
       if(TimeCurrent() - lastDriftLog > 300) {
-         AddLog("[PM DRIFT GUARD] Corte abortado: reduzir a pior posição afastaria o Preço Médio em mais de " + DoubleToString(InpMaxPMDriftPips, 1) + " pips.");
+         AddLog("[PM DRIFT GUARD] Corte abortado: reduzir a pior posiÃ§Ã£o afastaria o PreÃ§o MÃ©dio em mais de " + DoubleToString(InpMaxPMDriftPips, 1) + " pips.");
          lastDriftLog = TimeCurrent();
       }
       return;
@@ -635,7 +635,7 @@ void ProcessarSmartTrimming(bool forcar=false) {
       if(rc == TRADE_RETCODE_DONE || rc == TRADE_RETCODE_PLACED) {
          // Desconta o custo real do Fundo de Reserva Virtual
          AlterarFundoReserva(-realLoss);
-         // Atualiza estatísticas do Airbag
+         // Atualiza estatÃ­sticas do Airbag
          DefinirCortesCount(ObterCortesCount() + 1);
          DefinirCortesGasto(ObterCortesGasto() + realLoss);
          lastTrimmingTime = TimeCurrent();
@@ -646,7 +646,7 @@ void ProcessarSmartTrimming(bool forcar=false) {
 
 // Historico
 int      g_DealsCountCache = -1;
-// [BUG #6 FIX] Variaveis removidas Ã¢â‚¬â€ nao sao usadas em nenhum calculo
+// [BUG #6 FIX] Variaveis removidas ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â nao sao usadas em nenhum calculo
 // double   g_HistLucroBuy = 0, g_HistLucroSell = 0;
 // double   g_HistSwap     = 0;
 double   g_HistLucroGlobal = 0;
@@ -704,7 +704,7 @@ datetime g_PanicoLocalTimestamp  = 0;
 bool     g_PanelInited       = false;  // [v3.24] Flag para limpar ghosts no 1o frame
 int      g_DD_FaseAtual     = 0;  // Fase atual da barra de Drawdown %
 
-// === MODO ANÁLISE DE MERCADO (default OFF) ===
+// === MODO ANÃLISE DE MERCADO (default OFF) ===
 bool     g_ModoAnalise       = false;
 int      g_AnaHandleADX      = INVALID_HANDLE;
 int      g_AnaHandleRSI      = INVALID_HANDLE;
@@ -818,7 +818,7 @@ void AtualizarLoteBase() {
    double minV = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
    double maxV = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX);
    
-   // Prevenção de divisão por zero caso o broker retorne dados vazios/inválidos
+   // PrevenÃ§Ã£o de divisÃ£o por zero caso o broker retorne dados vazios/invÃ¡lidos
    if(step <= 0) step = 0.01;
    if(minV <= 0) minV = 0.01;
    if(maxV <= 0) maxV = 500.0;
@@ -1175,7 +1175,7 @@ void AtualizarCestoSell() {
             static datetime logBreakSOk = 0;
             if(TimeCurrent() - logBreakSOk > 600) {
                logBreakSOk = TimeCurrent();
-               AddLog("[SELL] Nível "+IntegerToString(g_SellTotal)+" atingido, mas DD Seguro (<10%). Mantendo TP normal.");
+               AddLog("[SELL] NÃ­vel "+IntegerToString(g_SellTotal)+" atingido, mas DD Seguro (<10%). Mantendo TP normal.");
             }
          }
       }
@@ -1229,7 +1229,7 @@ void AtualizarCestoSell() {
 }
 
 //===================================================================
-// TAKE PROFIT Ã¢â‚¬â€  FECHA CESTO QUANDO ATINGE ALVO
+// TAKE PROFIT ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬  FECHA CESTO QUANDO ATINGE ALVO
 //===================================================================
 void GetWorstOrderInfo(int magicNum, double &worstProf, double &worstVol, double &costMinLot) {
    worstProf = 0;
@@ -1415,11 +1415,11 @@ void GerenciarTPSell() {
 }
 
 //===================================================================
-// SOFT STOP Ã¢â‚¬â€  MONITORA DD COMBINADO DOS 2 CESTOS
+// SOFT STOP ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬  MONITORA DD COMBINADO DOS 2 CESTOS
 //===================================================================
 
 //===================================================================
-// SMART GATE [v3.41] — Motor de decisao adaptativo de recompra
+// SMART GATE [v3.41] â€” Motor de decisao adaptativo de recompra
 // Substitui o Soft Stop mecanico por score continuo 0-100
 // Quanto maior o DD, mais exigente em score, distancia e lote
 //===================================================================
@@ -1446,14 +1446,14 @@ double CalcularSmartGateScore() {
    // DD local do par (floating atual)
    scoreConta -= dd_pct * 150.0;
 
-   // DD global da conta (balance vs equity) — enxerga perdas realizadas
+   // DD global da conta (balance vs equity) â€” enxerga perdas realizadas
    double equity        = AccountInfoDouble(ACCOUNT_EQUITY);
    double dd_global_pct = (balance > 0 && equity < balance)
                           ? (balance - equity) / balance
                           : 0.0;
    scoreConta -= dd_global_pct * 150.0;
 
-   // Score mínimo também sobe com o pior entre local e global
+   // Score mÃ­nimo tambÃ©m sobe com o pior entre local e global
    double dd_pct_pior = MathMax(dd_pct, dd_global_pct);
 
    // Margem livre penaliza se abaixo de 30%
@@ -1558,13 +1558,13 @@ double CalcularSmartGateScore() {
    g_SGBloqueado    = (g_SGScoreAtual < g_SGScoreMinimo);
 
    if(g_SGBloqueado && !bloqueadoAntes)
-      AddLog("[SmartGate] BLOQUEADO — Score: " + DoubleToString(g_SGScoreAtual,1)
+      AddLog("[SmartGate] BLOQUEADO â€” Score: " + DoubleToString(g_SGScoreAtual,1)
            + " < Min: " + DoubleToString(g_SGScoreMinimo,1)
            + " | DD: " + DoubleToString(dd_pct*100.0,1) + "%"
            + " | DistX: " + DoubleToString(g_SGDistMultipl,2)
            + " | LoteX: " + DoubleToString(g_SGLoteFator,2));
    if(!g_SGBloqueado && bloqueadoAntes)
-      AddLog("[SmartGate] LIBERADO — Score: " + DoubleToString(g_SGScoreAtual,1)
+      AddLog("[SmartGate] LIBERADO â€” Score: " + DoubleToString(g_SGScoreAtual,1)
            + " >= Min: " + DoubleToString(g_SGScoreMinimo,1));
 
     g_SGScoreConta   = scoreConta;
@@ -1604,37 +1604,37 @@ bool FiltroRollover() {
 }
 
 //===================================================================
-// FILTRO DE PALAVRAS-CHAVE CRÍTICAS (Estilo Pasta Vermelha do Forex Factory)
+// FILTRO DE PALAVRAS-CHAVE CRÃTICAS (Estilo Pasta Vermelha do Forex Factory)
 //===================================================================
 bool IsCriticalHighImpactNews(string eventName) {
    string nameLower = eventName;
    StringToLower(nameLower);
    
-   // 1. Decisões de Taxa de Juros e FOMC
+   // 1. DecisÃµes de Taxa de Juros e FOMC
    if(StringFind(nameLower, "taxa de juros") >= 0 || StringFind(nameLower, "interest rate") >= 0) return true;
-   if(StringFind(nameLower, "decisão sobre a taxa") >= 0 || StringFind(nameLower, "rate decision") >= 0) return true;
-   if(StringFind(nameLower, "fomc") >= 0 || StringFind(nameLower, "política monetária") >= 0 || StringFind(nameLower, "monetary policy") >= 0) return true;
+   if(StringFind(nameLower, "decisÃ£o sobre a taxa") >= 0 || StringFind(nameLower, "rate decision") >= 0) return true;
+   if(StringFind(nameLower, "fomc") >= 0 || StringFind(nameLower, "polÃ­tica monetÃ¡ria") >= 0 || StringFind(nameLower, "monetary policy") >= 0) return true;
    if(StringFind(nameLower, "bank rate") >= 0 || StringFind(nameLower, "overnight rate") >= 0) return true;
    
-   // 2. Inflação (CPI / IPC)
-   if(StringFind(nameLower, "cpi") >= 0 || StringFind(nameLower, "ipc") >= 0 || StringFind(nameLower, "inflação") >= 0 || StringFind(nameLower, "inflation") >= 0) return true;
+   // 2. InflaÃ§Ã£o (CPI / IPC)
+   if(StringFind(nameLower, "cpi") >= 0 || StringFind(nameLower, "ipc") >= 0 || StringFind(nameLower, "inflaÃ§Ã£o") >= 0 || StringFind(nameLower, "inflation") >= 0) return true;
    
    // 3. Emprego (NFP / Non-Farm Payrolls)
    if(StringFind(nameLower, "payroll") >= 0 || StringFind(nameLower, "non-farm") >= 0 || StringFind(nameLower, "nfp") >= 0) return true;
-   if(StringFind(nameLower, "relatório de emprego") >= 0 || StringFind(nameLower, "employment report") >= 0) return true;
+   if(StringFind(nameLower, "relatÃ³rio de emprego") >= 0 || StringFind(nameLower, "employment report") >= 0) return true;
    if(StringFind(nameLower, "desemprego") >= 0 || StringFind(nameLower, "unemployment") >= 0) return true;
    
    // 4. PIB (GDP)
    if(StringFind(nameLower, "pib") >= 0 || StringFind(nameLower, "gdp") >= 0) return true;
    
-   // 4.1. Indicadores de Produção/Preços Industriais (PMI / PPI / IPP)
+   // 4.1. Indicadores de ProduÃ§Ã£o/PreÃ§os Industriais (PMI / PPI / IPP)
    if(StringFind(nameLower, "pmi") >= 0 || StringFind(nameLower, "ppi") >= 0 || StringFind(nameLower, "ipp") >= 0) return true;
    
    // 5. Vendas no Varejo (Retail Sales)
    if(StringFind(nameLower, "retail sales") >= 0 || StringFind(nameLower, "vendas no varejo") >= 0) return true;
    
    // 6. Discursos dos Presidentes dos Bancos Centrais (Powell, Lagarde, Bailey, Ueda, Macklem)
-   // Ignora discursos de membros menores que não movem o mercado
+   // Ignora discursos de membros menores que nÃ£o movem o mercado
    if(StringFind(nameLower, "discurso") >= 0 || StringFind(nameLower, "speaks") >= 0 || StringFind(nameLower, "speech") >= 0) {
       if(StringFind(nameLower, "powell") >= 0 || StringFind(nameLower, "lagarde") >= 0 || StringFind(nameLower, "bailey") >= 0 || StringFind(nameLower, "ueda") >= 0 || StringFind(nameLower, "macklem") >= 0) {
          return true;
@@ -1670,7 +1670,7 @@ bool IsNewsEventActive(bool &isFrozen, string &newsName) {
          if(StringFind(_Symbol, country.currency) < 0) continue;
       }
 
-      // Filtra apenas notícias críticas de altíssimo impacto (Pastas Vermelhas do Forex Factory)
+      // Filtra apenas notÃ­cias crÃ­ticas de altÃ­ssimo impacto (Pastas Vermelhas do Forex Factory)
       if(!IsCriticalHighImpactNews(event.name)) continue;
 
       // Filtro por nivel de impacto
@@ -1716,14 +1716,14 @@ bool IsNewsEventActive(bool &isFrozen, string &newsName) {
 
 void AtualizarEstadoNoticias() {
    static datetime lastNewsUpdate = 0;
-   if(TimeCurrent() - lastNewsUpdate < 60) return; // Evita sobrecarga de consultas ao calendário no OnTick
+   if(TimeCurrent() - lastNewsUpdate < 60) return; // Evita sobrecarga de consultas ao calendÃ¡rio no OnTick
    lastNewsUpdate = TimeCurrent();
    
    g_NewsActive = IsNewsEventActive(g_NewsFrozen, g_NewsName);
 }
 
 //===================================================================
-// FILTRO ATR [v3.28] — Distancia Minima por ATR entre Recompras
+// FILTRO ATR [v3.28] â€” Distancia Minima por ATR entre Recompras
 // Retorna TRUE se a recompra esta LIBERADA (preco se afastou o suficiente)
 // Retorna FALSE se BLOQUEADA (mercado lateral, muito perto da ultima entrada)
 //===================================================================
@@ -1731,7 +1731,7 @@ bool FiltroATRDistanciaOK(int magicNum, bool isBuy) {
    if(InpRecompra_ATR_Factor <= 0.0) return true;  // Filtro desligado
    if(g_ATR_Value <= 0) return true;               // ATR invalido: nao bloqueia
 
-   // [v3.29 FIX] Usa o preco EXTREMO do cesto como referencia — mesmo ponto da grade
+   // [v3.29 FIX] Usa o preco EXTREMO do cesto como referencia â€” mesmo ponto da grade
    // Antes usava a entrada mais recente, causando inconsistencia com o filtro de grade
    // e permitindo entradas proximas em mercados de bounce
    double dist_minima_pts = g_ATR_Value * InpRecompra_ATR_Factor;
@@ -1846,17 +1846,23 @@ void FecharTudoCiclo(bool autoReset) {
    GuardarResetTime("global", g_InicioHistorico);
    GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
    
-   // [v3.40 Senior Sync] Atualiza o saldo de referência para o novo saldo pós-fechamento na base global
+   // [v3.40 Senior Sync] Atualiza o saldo de referÃªncia para o novo saldo pÃ³s-fechamento na base global
    double newBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    g_EquityCycleBaseBalance = newBalance;
    string globalVarName = "OrionHedge_Global_EqBase";
    GlobalVariableSet(globalVarName, g_EquityCycleBaseBalance);
     
-   // Reset global de DD e Trailing no término do ciclo
+   // Reset global de DD e Trailing no tÃ©rmino do ciclo
    GlobalVariableSet("OrionHedge_Global_DDReached10", 0.0);
    GlobalVariableSet("OrionHedge_Global_DDReached20", 0.0);
    GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
    GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
+
+    // Reseta contadores e gastos de cortes das defesas para o novo ciclo
+    DefinirCortesCount(0);
+    DefinirCortesGasto(0.0);
+    DefinirHPCortesCount(0);
+    DefinirHPCortesGasto(0.0);
 
    g_DealsCountCache = -1;
 
@@ -1880,7 +1886,7 @@ void FecharTudoCiclo(bool autoReset) {
          AddLog("CICLO DE EQUITY: Cestos ZERADOS. Novo ciclo iniciado.");
       }
       
-      // Garante que o robô continue ativo
+      // Garante que o robÃ´ continue ativo
       GlobalVariableSet("OrionHedge_Global_BotPaused", 0.0);
       g_BotPaused = false;
    }
@@ -1922,7 +1928,7 @@ void ProcessarSmartEscape(double ddPct) {
    int magicVencedor  = buyEhPerdedor ? g_MagicSell : g_MagicBuy;
    double lucroVencedor = buyEhPerdedor ? sellPnL : buyPnL;
 
-   // === FASE 1: DD 30-38% — fecha as 2 piores ordens ao tocar maxima dos ultimos N candles ===
+   // === FASE 1: DD 30-38% â€” fecha as 2 piores ordens ao tocar maxima dos ultimos N candles ===
    if(fase1Ativa) {
       double maxima = 0;
       for(int i = 1; i <= InpSECandlesFase1; i++) {
@@ -1966,7 +1972,7 @@ void ProcessarSmartEscape(double ddPct) {
       return;
    }
 
-   // === FASE 2: DD > 38% — usa lucro do vencedor para abater o perdedor no mesmo par ===
+   // === FASE 2: DD > 38% â€” usa lucro do vencedor para abater o perdedor no mesmo par ===
    if(fase2Ativa) {
       if(lucroVencedor <= 0) return;
 
@@ -2013,7 +2019,7 @@ void VerificarCicloEquity() {
    double equity  = AccountInfoDouble(ACCOUNT_EQUITY);
    if(balance <= 0) return;
 
-   // 1. Inicializa ou recupera o saldo de referência usando GlobalVariables do MT5 (segurança contra queda da VPS)
+   // 1. Inicializa ou recupera o saldo de referÃªncia usando GlobalVariables do MT5 (seguranÃ§a contra queda da VPS)
    string globalVarName = "OrionHedge_Global_EqBase";
    string migratedVarName = "OrionHedge_Global_EqBaseMigrated_V2";
    
@@ -2024,8 +2030,8 @@ void VerificarCicloEquity() {
       if(curBase > 0) hasGlobalBase = true;
    }
    
-   // [MIGRATION-FALLBACK] Uma única migração se o ciclo estiver ativo e houver base antiga salva
-   // Usamos TemPosicoesLocais() para garantir que apenas o gráfico com posições ativas faça a migração inicial.
+   // [MIGRATION-FALLBACK] Uma Ãºnica migraÃ§Ã£o se o ciclo estiver ativo e houver base antiga salva
+   // Usamos TemPosicoesLocais() para garantir que apenas o grÃ¡fico com posiÃ§Ãµes ativas faÃ§a a migraÃ§Ã£o inicial.
    if(!hasGlobalBase && !GlobalVariableCheck(migratedVarName) && TemPosicoesLocais()) {
       string oldVarName = "OrionHedge_EqBase_" + _Symbol;
       if(GlobalVariableCheck(oldVarName)) {
@@ -2043,8 +2049,8 @@ void VerificarCicloEquity() {
       if(GlobalVariableCheck(globalVarName)) {
          double savedBase = GlobalVariableGet(globalVarName);
          // [BUG-FIX] Sanity check: se a base salva desviou > 20% do saldo real,
-         // ela está desatualizada (ex: depósito externo, troca de conta, migração).
-         // Reinicializa com o saldo real para corrigir o "preço base antigo".
+         // ela estÃ¡ desatualizada (ex: depÃ³sito externo, troca de conta, migraÃ§Ã£o).
+         // Reinicializa com o saldo real para corrigir o "preÃ§o base antigo".
          double deviation = (balance > 0) ? MathAbs(savedBase - balance) / balance * 100.0 : 100.0;
          if(deviation > 20.0) {
             g_EquityCycleBaseBalance = balance;
@@ -2059,7 +2065,7 @@ void VerificarCicloEquity() {
       }
    }
 
-   // Se não houver posições em nenhum dos cestos de nenhuma moeda (ciclo global ocioso)
+   // Se nÃ£o houver posiÃ§Ãµes em nenhum dos cestos de nenhuma moeda (ciclo global ocioso)
    if(!TemPosicoesGlobais()) {
       g_DD_Reached10        = false;
       g_DD_Reached20        = false;
@@ -2072,9 +2078,15 @@ void VerificarCicloEquity() {
       GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
       GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
 
+    // Reseta contadores e gastos de cortes das defesas para o novo ciclo
+    DefinirCortesCount(0);
+    DefinirCortesGasto(0.0);
+    DefinirHPCortesCount(0);
+    DefinirHPCortesGasto(0.0);
+
       bool updated = false;
       // [FIX] A base do ciclo de equity agora permanece fixa para acumular lucros.
-      // Só resincronizamos a base se houver um depósito ou saque externo (diferença > 200 USC / $2 USD entre o saldo real e o esperado).
+      // SÃ³ resincronizamos a base se houver um depÃ³sito ou saque externo (diferenÃ§a > 200 USC / $2 USD entre o saldo real e o esperado).
       double expectedBalance = g_EquityCycleBaseBalance + g_HistLucroGlobal;
       if(MathAbs(balance - expectedBalance) > 200.0) {
          g_EquityCycleBaseBalance = balance;
@@ -2086,13 +2098,13 @@ void VerificarCicloEquity() {
          g_InicioHistorico = TimeCurrent();
          GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
          GuardarResetTime("global", g_InicioHistorico);
-         g_DealsCountCache = -1; // Força recálculo do histórico
-         AddLog("CICLO DE EQUITY: Depósito/Saque ou ajuste detectado. Nova base definida para " + DoubleToString(balance, 2) + " e reiniciando histórico do ciclo.");
+         g_DealsCountCache = -1; // ForÃ§a recÃ¡lculo do histÃ³rico
+         AddLog("CICLO DE EQUITY: DepÃ³sito/Saque ou ajuste detectado. Nova base definida para " + DoubleToString(balance, 2) + " e reiniciando histÃ³rico do ciclo.");
       }
       return;
    }
 
-   // 2. Calcula lucros e swaps de ordens abertas para estatísticas de drawdown
+   // 2. Calcula lucros e swaps de ordens abertas para estatÃ­sticas de drawdown
    double global_profit = 0, global_swap = 0;
    for(int i = 0; i < PositionsTotal(); i++) {
       ulong tck = PositionGetTicket(i);
@@ -2121,11 +2133,11 @@ void VerificarCicloEquity() {
    if(GlobalVariableCheck("OrionHedge_Global_DDReached10") && GlobalVariableGet("OrionHedge_Global_DDReached10") > 0.5) g_DD_Reached10 = true;
    if(GlobalVariableCheck("OrionHedge_Global_DDReached20") && GlobalVariableGet("OrionHedge_Global_DDReached20") > 0.5) g_DD_Reached20 = true;
 
-   // 3. Calcula o lucro líquido real acumulado do ciclo (L. LÍQUIDO = Fechado + Aberto)
+   // 3. Calcula o lucro lÃ­quido real acumulado do ciclo (L. LÃQUIDO = Fechado + Aberto)
    double profitNet = g_HistLucroGlobal + global_total;
    double pctNet = (g_EquityCycleBaseBalance > 0) ? (profitNet / g_EquityCycleBaseBalance * 100.0) : 0.0;
    
-   // A meta percentual é calculada dinamicamente pelo SmartTarget com base no DD atual
+   // A meta percentual Ã© calculada dinamicamente pelo SmartTarget com base no DD atual
    double currentTargetPct = CalcularMetaSmartTarget(dd_glb_pct);
    
    g_PeakProfit = pctNet;
@@ -2135,16 +2147,16 @@ void VerificarCicloEquity() {
 
    // 4. Verifica se a meta de lucro do ciclo foi atingida
    if(pctNet >= currentTargetPct) {
-      string msg = "ORION HEDGE - META DE EQUITY ATINGIDA! ✅\n";
+      string msg = "ORION HEDGE - META DE EQUITY ATINGIDA! âœ…\n";
       msg += "Ativo: " + _Symbol + "\n";
       msg += "Saldo Anterior: " + DoubleToString(g_EquityCycleBaseBalance, 2) + "\n";
-      msg += "Lucro Realizado Líquido: " + DoubleToString(profitNet, 2) + " (" + DoubleToString(pctNet, 2) + "%)\n";
-      msg += "Novo Saldo de Referência: " + DoubleToString(equity, 2) + "\n";
+      msg += "Lucro Realizado LÃ­quido: " + DoubleToString(profitNet, 2) + " (" + DoubleToString(pctNet, 2) + "%)\n";
+      msg += "Novo Saldo de ReferÃªncia: " + DoubleToString(equity, 2) + "\n";
       
       if(InpAutoResetCiclo) {
-         msg += "Ação: Fechando tudo e reiniciando ciclo automático.";
+         msg += "AÃ§Ã£o: Fechando tudo e reiniciando ciclo automÃ¡tico.";
       } else {
-         msg += "Ação: Fechando tudo e Pausando o robô.";
+         msg += "AÃ§Ã£o: Fechando tudo e Pausando o robÃ´.";
       }
 
       if(InpPushFechamento) {
@@ -2157,14 +2169,14 @@ void VerificarCicloEquity() {
 }
 
 //===================================================================
-// EXECUTAR GRADE — RECOMPRAS
+// EXECUTAR GRADE â€” RECOMPRAS
 //===================================================================
 double CalcNovoLote(int nivelAtual, double loteInicial=0) {
    double step=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
    double minV=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
    double maxV=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX);
    
-   // [v3.33 Senior Audit] Prevenção de divisão por zero caso o broker retorne dados vazios/inválidos
+   // [v3.33 Senior Audit] PrevenÃ§Ã£o de divisÃ£o por zero caso o broker retorne dados vazios/invÃ¡lidos
    if(step <= 0) step = 0.01;
    if(minV <= 0) minV = 0.01;
    if(maxV <= 0) maxV = 500.0;
@@ -2181,7 +2193,7 @@ bool FiltroAntiFacaConfirmado(bool isBuy) {
    double openPrice  = iOpen(_Symbol, InpAntiFacaTF, 1);
    double closePrice = iClose(_Symbol, InpAntiFacaTF, 1);
    
-   if(openPrice <= 0 || closePrice <= 0) return true; // Segurança caso falhe a leitura dos dados
+   if(openPrice <= 0 || closePrice <= 0) return true; // SeguranÃ§a caso falhe a leitura dos dados
    
    // BUG #6 FIX: Tolerancia minima para evitar bloqueio por doji em baixa liquidez.
    // Um candle com diff de 1 pip nao deve bloquear recompras indefinidamente.
@@ -2197,7 +2209,7 @@ bool FiltroAntiFacaConfirmado(bool isBuy) {
 }
 
 //===================================================================
-// FILTRO DE TENDÊNCIA E NOTÍCIA PARA NOVAS RECOMPRAS
+// FILTRO DE TENDÃŠNCIA E NOTÃCIA PARA NOVAS RECOMPRAS
 //===================================================================
 bool BloquearNovaRecompra(bool isBuy) {
    if(InpBloquearRecompraNoticia && g_NewsActive) {
@@ -2236,14 +2248,14 @@ void ExecutarGradeBuy() {
    else { tenta=true; AddLog("[BUY] FR indisponivel N"+IntegerToString(nivel)+". Forcado."); }
    if(!tenta) return;
 
-   // [v3.38] Gatilho Anti-Faca: aguarda fechamento de candle na direção do cesto
+   // [v3.38] Gatilho Anti-Faca: aguarda fechamento de candle na direÃ§Ã£o do cesto
    if(!FiltroAntiFacaConfirmado(true)) return;
 
    // [FILTRO NOTICIA/TENDENCIA]
    if(BloquearNovaRecompra(true)) {
       static datetime lastLogBuy = 0;
       if(TimeCurrent() - lastLogBuy > 60) {
-         AddLog("[TENDÊNCIA/NOTÍCIA] Recompra de COMPRA bloqueada: Filtro ativo.");
+         AddLog("[TENDÃŠNCIA/NOTÃCIA] Recompra de COMPRA bloqueada: Filtro ativo.");
          lastLogBuy = TimeCurrent();
       }
       return;
@@ -2291,14 +2303,14 @@ void ExecutarGradeSell() {
    else { tenta=true; AddLog("[SELL] FR indisponivel N"+IntegerToString(nivel)+". Forcado."); }
    if(!tenta) return;
 
-   // [v3.38] Gatilho Anti-Faca: aguarda fechamento de candle na direção do cesto
+   // [v3.38] Gatilho Anti-Faca: aguarda fechamento de candle na direÃ§Ã£o do cesto
    if(!FiltroAntiFacaConfirmado(false)) return;
 
    // [FILTRO NOTICIA/TENDENCIA]
    if(BloquearNovaRecompra(false)) {
       static datetime lastLogSell = 0;
       if(TimeCurrent() - lastLogSell > 60) {
-         AddLog("[TENDÊNCIA/NOTÍCIA] Recompra de VENDA bloqueada: Filtro ativo.");
+         AddLog("[TENDÃŠNCIA/NOTÃCIA] Recompra de VENDA bloqueada: Filtro ativo.");
          lastLogSell = TimeCurrent();
       }
       return;
@@ -2395,7 +2407,7 @@ void PublishGlobalFilterParams() {
 int OnInit() {
    // ===== VALIDACAO DE SIMBOLO [v3.24+] =====
    // [BUG #2 FIX] Verifica se o simbolo CONTEM o par base (aceita qualquer sufixo de broker)
-   // Ex: EURUSD, EURUSDc, EURUSD., EURUSD_m, EURUSDpro — todos aceitos
+   // Ex: EURUSD, EURUSDc, EURUSD., EURUSD_m, EURUSDpro â€” todos aceitos
    string basePares[] = {"EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD","USDCAD"};
    bool   simboloOk   = false;
    for(int k=0; k<6; k++) {
@@ -2438,7 +2450,7 @@ int OnInit() {
       g_SellSaidaZeroAtiva = (GlobalVariableGet("OrionHedge_SOS_SellAtiva_" + _Symbol) > 0.5);
    
    CarregarFundoInicialGlobal();
-   LimparPainel();  // [v3.25] Vassoura completa on init — remove fantasmas de sessoes anteriores
+   LimparPainel();  // [v3.25] Vassoura completa on init â€” remove fantasmas de sessoes anteriores
    EventSetTimer(1);
    AddLog("ORION v3.40 OK! Par: "+_Symbol+" | MagicBuy="+IntegerToString(g_MagicBuy));
    AddLog("[WEB] Web Ativa: " + (InpWebAtiva ? "SIM" : "NAO") + " | URL: " + InpWebUrl);
@@ -2706,14 +2718,14 @@ void GerarRelatorioHTML() {
       double pctDia = (baseSaldo > 0) ? (dias[i].lucro / baseSaldo) : 0.0;
       
       double factor = 1.0 + pctDia;
-      if(factor < 0.0) factor = 0.0; // Evita fatores negativos em caso de perdas catastróficas
+      if(factor < 0.0) factor = 0.0; // Evita fatores negativos em caso de perdas catastrÃ³ficas
       accumulatedFactor *= factor;
    }
    
    double pctTotalPeriodo = (accumulatedFactor - 1.0) * 100.0;
    double mediaDiariaPct = (diasCount > 0) ? (pctTotalPeriodo / diasCount) : 0.0;
 
-   // Saldo inicial estimado do período para exibição informativa nos KPIs
+   // Saldo inicial estimado do perÃ­odo para exibiÃ§Ã£o informativa nos KPIs
    double saldoInicialPeriodo = 0;
    if(diasCount > 0) {
       saldoInicialPeriodo = ObterSaldoHistorico(dias[0].data);
@@ -2729,7 +2741,7 @@ void GerarRelatorioHTML() {
       saldoInicialPeriodo = AccountInfoDouble(ACCOUNT_BALANCE);
    }
 
-   // Calcular total de depósitos no período para o Retorno de Caixa (Cash-on-Cash)
+   // Calcular total de depÃ³sitos no perÃ­odo para o Retorno de Caixa (Cash-on-Cash)
    double totalDepositosPeriodo = 0.0;
    for(int i = 0; i < totalDeals; i++) {
       ulong t = HistoryDealGetTicket(i);
@@ -2952,20 +2964,20 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
 }
 
 //===================================================================
-// MONITORAMENTO AUTOMÁTICO DE RESGATE AGENDADO (S.O.S)
+// MONITORAMENTO AUTOMÃTICO DE RESGATE AGENDADO (S.O.S)
 //===================================================================
 void ProcessarAgendamentoSOS() {
    // Se cesto Buy tem agendamento ativo
    if(g_BuySaidaZeroAtiva) {
       if(g_BuyNivelAtual < 4) {
-         SetBuySaidaZeroAtiva(false); // Cancela se não houver recompras
+         SetBuySaidaZeroAtiva(false); // Cancela se nÃ£o houver recompras
       } else {
          int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
          if(ObterDadosRecompraDirecao(true, level, ticket, loss, lucroOposto, magicOposto)) {
             double absLoss = MathAbs(loss);
             double buffer = MathMax(1.00, absLoss * 0.10);
             if(lucroOposto >= absLoss + buffer) {
-               AddLog("[S.O.S AUTOMÁTICO] Executando resgate agendado de COMPRA N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) com lucro de VENDA (+" + DoubleToString(lucroOposto, 2) + " USC).");
+               AddLog("[S.O.S AUTOMÃTICO] Executando resgate agendado de COMPRA N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) com lucro de VENDA (+" + DoubleToString(lucroOposto, 2) + " USC).");
                
                if(trade.PositionClose(ticket)) {
                   for(int i = PositionsTotal() - 1; i >= 0; i--) {
@@ -2981,7 +2993,7 @@ void ProcessarAgendamentoSOS() {
                   DesenharPainel();
                   ChartRedraw(0);
                } else {
-                  AddLog("[S.O.S AUTOMÁTICO] Erro ao fechar posição de resgate COMPRA N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
+                  AddLog("[S.O.S AUTOMÃTICO] Erro ao fechar posiÃ§Ã£o de resgate COMPRA N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
                }
             }
          }
@@ -2991,14 +3003,14 @@ void ProcessarAgendamentoSOS() {
    // Se cesto Sell tem agendamento ativo
    if(g_SellSaidaZeroAtiva) {
       if(g_SellNivelAtual < 4) {
-         SetSellSaidaZeroAtiva(false); // Cancela se não houver recompras
+         SetSellSaidaZeroAtiva(false); // Cancela se nÃ£o houver recompras
       } else {
          int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
          if(ObterDadosRecompraDirecao(false, level, ticket, loss, lucroOposto, magicOposto)) {
             double absLoss = MathAbs(loss);
             double buffer = MathMax(1.00, absLoss * 0.10);
             if(lucroOposto >= absLoss + buffer) {
-               AddLog("[S.O.S AUTOMÁTICO] Executando resgate agendado de VENDA N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) com lucro de COMPRA (+" + DoubleToString(lucroOposto, 2) + " USC).");
+               AddLog("[S.O.S AUTOMÃTICO] Executando resgate agendado de VENDA N" + IntegerToString(level) + " (" + DoubleToString(loss, 2) + " USC) com lucro de COMPRA (+" + DoubleToString(lucroOposto, 2) + " USC).");
                
                if(trade.PositionClose(ticket)) {
                   for(int i = PositionsTotal() - 1; i >= 0; i--) {
@@ -3014,7 +3026,7 @@ void ProcessarAgendamentoSOS() {
                   DesenharPainel();
                   ChartRedraw(0);
                } else {
-                  AddLog("[S.O.S AUTOMÁTICO] Erro ao fechar posição de resgate VENDA N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
+                  AddLog("[S.O.S AUTOMÃTICO] Erro ao fechar posiÃ§Ã£o de resgate VENDA N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
                }
             }
          }
@@ -3023,7 +3035,7 @@ void ProcessarAgendamentoSOS() {
 }
 
 //===================================================================
-// ONTICK — MOTOR HEDGE
+// ONTICK â€” MOTOR HEDGE
 //===================================================================
 void OnTick() {
    g_LastTickTime = TimeCurrent();
@@ -3042,7 +3054,7 @@ void OnTick() {
    // [BUG-A2 FIX] Atualiza os sensores de volatilidade (g_ATR_Value) primeiro
    AtualizarSensores();
 
-   // [BUG-A2 FIX] Calcula o TP dinâmico com dados de volatilidade frescos
+   // [BUG-A2 FIX] Calcula o TP dinÃ¢mico com dados de volatilidade frescos
    if(InpDynamicTP && InpDynamicAtrRef > 0 && g_ATR_Value > 0) {
       double atr_ref_preco = InpDynamicAtrRef * _Point;
       // [v3.24] "Foto Instantanea": detecta candle grande IMEDIATAMENTE
@@ -3065,7 +3077,7 @@ void OnTick() {
    AtualizarCestoBuy();
    AtualizarCestoSell();
    
-   // Monitoramento automático da saída zero a zero agendada
+   // Monitoramento automÃ¡tico da saÃ­da zero a zero agendada
    ProcessarAgendamentoSOS();
    
    GerenciarTPBuy();
@@ -3102,7 +3114,7 @@ void OnTick() {
    static bool alertBuySent = false;
    if(buyEmPressao) {
       if(!alertBuySent) {
-         AddLog("[BUY] ALERTA SmartGate: Score=" + DoubleToString(g_SGScoreAtual,1) + " — cesto em pressao, recompras restringidas.");
+         AddLog("[BUY] ALERTA SmartGate: Score=" + DoubleToString(g_SGScoreAtual,1) + " â€” cesto em pressao, recompras restringidas.");
          alertBuySent = true;
       }
    } else if(g_BuyTotal == 0) { alertBuySent = false; }
@@ -3110,7 +3122,7 @@ void OnTick() {
    static bool alertSellSent = false;
    if(sellEmPressao) {
       if(!alertSellSent) {
-         AddLog("[SELL] ALERTA SmartGate: Score=" + DoubleToString(g_SGScoreAtual,1) + " — cesto em pressao, recompras restringidas.");
+         AddLog("[SELL] ALERTA SmartGate: Score=" + DoubleToString(g_SGScoreAtual,1) + " â€” cesto em pressao, recompras restringidas.");
          alertSellSent = true;
       }
    } else if(g_SellTotal == 0) { alertSellSent = false; }
@@ -3181,7 +3193,7 @@ void OnTick() {
 }
 
 //===================================================================
-// [v3.29] MONITOR DE FASES DE DRAWDOWN — Alerta UMA vez por transicao
+// [v3.29] MONITOR DE FASES DE DRAWDOWN â€” Alerta UMA vez por transicao
 // DD %  : verde <10% | amarelo 10-20% | vermelho >=20%
 // SS %  : verde <33% | amarelo 33-66% | vermelho >=66%
 //===================================================================
@@ -3189,7 +3201,7 @@ void MonitorarFasesDD() {
    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
    if(balance <= 0) return;
 
-   // [BUG-A1/BUG-A4 FIX] Calcula o rebaixamento considerando apenas as posições do Orion
+   // [BUG-A1/BUG-A4 FIX] Calcula o rebaixamento considerando apenas as posiÃ§Ãµes do Orion
    double global_profit = 0, global_swap = 0;
    for(int i = 0; i < PositionsTotal(); i++) {
       ulong tck = PositionGetTicket(i);
@@ -3220,14 +3232,14 @@ void MonitorarFasesDD() {
    if(novaFaseDD > g_DD_FaseAtual) {
       if(novaFaseDD == 2)
          AddLog("[DD VERMELHO] Drawdown critico: " + DoubleToString(dd_pct,1) +
-               "% (" + DoubleToString(dd_usd,2) + " USC) — PERIGO MAXIMO! Par: " + _Symbol);
+               "% (" + DoubleToString(dd_usd,2) + " USC) â€” PERIGO MAXIMO! Par: " + _Symbol);
       AddLog((novaFaseDD==1?"[DD] AMARELO: ":"[DD] VERMELHO: ") +
              DoubleToString(dd_pct,1)+"% | "+DoubleToString(dd_usd,2)+" USC");
       g_DD_FaseAtual = novaFaseDD;
    } else if(novaFaseDD < g_DD_FaseAtual) {
       if(g_DD_FaseAtual > 0 && dd_usd > 0)
          AddLog("[DD] Recuperado para zona " + (novaFaseDD==0?"VERDE":"AMARELA") +
-                " — " + DoubleToString(dd_pct,1) + "%");
+                " â€” " + DoubleToString(dd_pct,1) + "%");
       g_DD_FaseAtual = novaFaseDD;
    }
 
@@ -3248,20 +3260,20 @@ void MonitorarFasesDD() {
    if(novaFaseSG > g_SG_FaseAtual) {
       if(novaFaseSG == 2)
          AddLog("[SG VERMELHO] SmartGate CRITICO: Score=" + DoubleToString(g_SGScoreAtual,1)
-              + " Min=" + DoubleToString(g_SGScoreMinimo,1) + " — BLOQUEADO! Par: " + _Symbol);
+              + " Min=" + DoubleToString(g_SGScoreMinimo,1) + " â€” BLOQUEADO! Par: " + _Symbol);
       AddLog((novaFaseSG==1?"[SG] AMARELO: Score=":"[SG] VERMELHO: Score=") + DoubleToString(g_SGScoreAtual,1));
       g_SG_FaseAtual = novaFaseSG;
    } else if(novaFaseSG < g_SG_FaseAtual) {
       if(g_SG_FaseAtual > 0)
          AddLog("[SG] Recuperado para zona " + (novaFaseSG==0?"VERDE":"AMARELA")
-              + " — Score=" + DoubleToString(g_SGScoreAtual,1));
+              + " â€” Score=" + DoubleToString(g_SGScoreAtual,1));
       g_SG_FaseAtual = novaFaseSG;
    }
 }
 
 
 //===================================================================
-// GUI — HELPERS
+// GUI â€” HELPERS
 //===================================================================
 void PClear(string id) {
    string t1=PANEL_PREFIX+id; if(ObjectFind(0,t1)>=0) ObjectSetString(0,t1,OBJPROP_TEXT,"");
@@ -3571,9 +3583,9 @@ void DesenharWidgetStatus() {
 }
 
 //===================================================================
-// DESENHAR PAINEL — ESTILO ORIGINAL V3.22
+// DESENHAR PAINEL â€” ESTILO ORIGINAL V3.22
 //===================================================================
-// LIMPAR CONTEUDO (mantém header/border/botoes) — fix sobreposição
+// LIMPAR CONTEUDO (mantÃ©m header/border/botoes) â€” fix sobreposiÃ§Ã£o
 void LimparConteudoPainel() {
    for(int i=ObjectsTotal(0,0,-1)-1;i>=0;i--) {
       string nm=ObjectName(0,i,0,-1);
@@ -3647,7 +3659,7 @@ double GetUSDBRLFromAPI() {
    string url = "https://economia.awesomeapi.com.br/json/last/USD-BRL";
    
    // WebRequest necessita que a URL "https://economia.awesomeapi.com.br"
-   // esteja cadastrada nas Opções do MT5 -> Expert Advisors
+   // esteja cadastrada nas OpÃ§Ãµes do MT5 -> Expert Advisors
    ResetLastError();
    int res = WebRequest("GET", url, "", 3000, data, result, result_headers);
    
@@ -3674,7 +3686,7 @@ double GetUSDBRLFromAPI() {
       if(TimeCurrent() - lastLogTime > 600) {
          lastLogTime = TimeCurrent();
          if(res == -1) {
-            Print("[USD/BRL WEB] WebRequest falhou (Erro MQL5 ", err, "). Para atualizar a conversão em R$ dinamicamente com o Dólar real, adicione a URL 'https://economia.awesomeapi.com.br' no menu Ferramentas -> Opcoes -> Expert Advisors -> Permitir WebRequest.");
+            Print("[USD/BRL WEB] WebRequest falhou (Erro MQL5 ", err, "). Para atualizar a conversÃ£o em R$ dinamicamente com o DÃ³lar real, adicione a URL 'https://economia.awesomeapi.com.br' no menu Ferramentas -> Opcoes -> Expert Advisors -> Permitir WebRequest.");
          } else {
             Print("[USD/BRL WEB] API retornou erro HTTP: ", res);
          }
@@ -3687,13 +3699,13 @@ double GetUSDBRLFromAPI() {
 // OBTER TAXA BRL DINAMICA (USD/BRL)
 //===================================================================
 double ObterTaxaBRLDinamica() {
-   // 1. Tenta obter a cotação em tempo real via API Web
+   // 1. Tenta obter a cotaÃ§Ã£o em tempo real via API Web
    double apiBid = GetUSDBRLFromAPI();
    if(apiBid > 0) {
       return apiBid;
    }
    
-   // 2. Se falhar, tenta buscar nomes de símbolos USDBRL comuns no broker
+   // 2. Se falhar, tenta buscar nomes de sÃ­mbolos USDBRL comuns no broker
    string commonNames[] = {"USDBRL", "USDBRLc", "USDBRLm", "USDBRL_ec", "USDBRL_i", "USDBRL_k"};
    int numNames = ArraySize(commonNames);
    
@@ -3716,7 +3728,7 @@ double ObterTaxaBRLDinamica() {
       }
    }
    
-   // Se falhar a busca direta, tenta varrer a lista de símbolos
+   // Se falhar a busca direta, tenta varrer a lista de sÃ­mbolos
    string symbolFound = "";
    int totalSymbols = SymbolsTotal(false);
    for(int i = 0; i < totalSymbols; i++) {
@@ -3747,7 +3759,7 @@ double ObterTaxaBRLDinamica() {
       }
    }
    
-   // Se tudo falhar, gera relatório de diagnóstico para descobrirmos os nomes dos símbolos BRL (apenas uma vez para economizar disco)
+   // Se tudo falhar, gera relatÃ³rio de diagnÃ³stico para descobrirmos os nomes dos sÃ­mbolos BRL (apenas uma vez para economizar disco)
    static bool diagnosticWritten = false;
    if(!diagnosticWritten) {
       int fileHandle = FileOpen("orion_brl_symbols.txt", FILE_WRITE|FILE_TXT|FILE_ANSI);
@@ -3822,7 +3834,7 @@ void DesenharPainel() {
 
     //=======================================================  TELA CONFIGURACAO
    if(g_ShowSettings) {
-      // ----- HISTÓRICO DE LUCRO (NOVO) -----
+      // ----- HISTÃ“RICO DE LUCRO (NOVO) -----
       PSect("cfg_rep_sec",px,cur,pw,"HISTORICO DE LUCRO (RELATORIO)",CLR_PURPLE); cur+=22;
       
       // Decompoem a data de inicio do relatorio
@@ -4062,7 +4074,7 @@ void DesenharPainel() {
    double global_total = global_profit + global_swap;
    double global_media = (open_symbols_count > 0) ? (global_total / open_symbols_count) : 0;
 
-    // SEÇÃO VISÃO GLOBAL - TABULAR 4 COLUNAS
+    // SEÃ‡ÃƒO VISÃƒO GLOBAL - TABULAR 4 COLUNAS
     double fatBRL = g_TaxaBRLAtual;
     string accCurr = AccountInfoString(ACCOUNT_CURRENCY);
     if(StringFind(accCurr, "USC") >= 0 || StringFind(accCurr, "Cent") >= 0 || StringFind(accCurr, "c") >= 0) fatBRL = g_TaxaBRLAtual / 100.0;
@@ -4094,12 +4106,12 @@ void DesenharPainel() {
     ObjectDelete(0, PANEL_PREFIX + "sep_sal");
     cur += 6;
     
-    // 2. PATRIMÔNIO (Saldo Líquido)
+    // 2. PATRIMÃ”NIO (Saldo LÃ­quido)
     double pct_total = (balance > 0) ? ((equity - balance) / balance * 100.0) : 0.0;
     string sPctTotal = (pct_total >= 0 ? "+" : "") + DoubleToString(pct_total, 2) + "%";
     color clrTotal = (pct_total >= 0) ? C'0,200,83' : C'255,82,82';
     
-    PLabel("lbl_eq_l", lx, cur+2, "PATRIMÔNIO", CLR_TXT_DIM, 8);
+    PLabel("lbl_eq_l", lx, cur+2, "PATRIMÃ”NIO", CLR_TXT_DIM, 8);
     PLabelR("lbl_eq_brl", lx + 160, cur+2, FormatBRL(equity * fatBRL), CLR_TXT_DIM, 8);
     PLabelR("lbl_eq_usc", rx - 55, cur+1, FormatUSC(equity) + " USC", clrTotal, 10, true);
     ObjectDelete(0, PANEL_PREFIX + "R_lbl_eq_pct"); // Deleta a porcentagem do patrimonio
@@ -4131,13 +4143,13 @@ void DesenharPainel() {
     PLabelR("lbl_hist_pct", rx - 2, cur+2, sPctHist, clrHist, 8);
     cur += 16;
     
-    // 6. L. LÍQUIDO
+    // 6. L. LÃQUIDO
     double lucroLiquido = g_HistLucroGlobal + global_total;
     double pct_liq = (start_balance > 0) ? (lucroLiquido / start_balance * 100.0) : 0.0;
     string sPctLiq = (pct_liq >= 0 ? "+" : "") + DoubleToString(pct_liq, 2) + "%";
     color clrLiq = (lucroLiquido >= 0) ? C'0,200,83' : C'255,82,82';
     
-    PLabel("lbl_liq_l", lx, cur+2, "L. LÍQUIDO", CLR_TXT_DIM, 8);
+    PLabel("lbl_liq_l", lx, cur+2, "L. LÃQUIDO", CLR_TXT_DIM, 8);
     PLabelR("lbl_liq_brl", lx + 160, cur+2, FormatBRL(lucroLiquido * fatBRL), CLR_TXT_DIM, 8);
     PLabelR("lbl_liq_usc", rx - 55, cur+1, FormatUSC(lucroLiquido, true) + " USC", clrLiq, 10, true);
     PLabelR("lbl_liq_pct", rx - 2, cur+2, sPctLiq, clrLiq, 8);
@@ -4166,10 +4178,10 @@ void DesenharPainel() {
     // Separador 4 (Entre Rendimentos e Risco Flutuante)
     PRect("sep_liq", lx, cur, thm_w, 1, CLR_LINE_SOFT, -1, 204); cur += 10;
 
-   // BUG #12: Exclusão redundante removida para evitar flicker visual.
+   // BUG #12: ExclusÃ£o redundante removida para evitar flicker visual.
    // LimparConteudoPainel() ja limpa os botoes de filtro na transicao de tela (g_ShowSettings).
 
-   // DRAWDOWN GLOBAL - barra 3 zonas pre-pintadas (verde→amarelo→vermelho)
+   // DRAWDOWN GLOBAL - barra 3 zonas pre-pintadas (verdeâ†’amareloâ†’vermelho)
    double dd_glb_pct = (balance>0) ? MathAbs(MathMin(0.0, global_total))/balance*100.0 : 0.0;
    color dd_glb_clr = (dd_glb_pct>=35.0)?C'255,82,82':(dd_glb_pct>=20.0?CLR_AMBER:C'0,200,83');
    double maxDDAllowedPct = (balance > 0) ? (g_SGScoreMinimo / 100.0 * 30.0) : 0.0;
@@ -4217,8 +4229,8 @@ void DesenharPainel() {
           string zonaAlvo = "";
            if(InpSTHabilitado) {
               if(dd_glb_pct >= InpSTDDSobreviv)      zonaAlvo = " Sobreviv.";
-              else if(dd_glb_pct >= InpSTDDCritico)  zonaAlvo = " Crítico";
-              else if(dd_glb_pct >= InpSTDDPressao)  zonaAlvo = " Pressão";
+              else if(dd_glb_pct >= InpSTDDCritico)  zonaAlvo = " CrÃ­tico";
+              else if(dd_glb_pct >= InpSTDDPressao)  zonaAlvo = " PressÃ£o";
               else                                   zonaAlvo = " Normal";
            }
            
@@ -4233,7 +4245,7 @@ void DesenharPainel() {
           string sLabel1 = "BASE  " + pipe + "  " + sBaseVal;
           string sValue1 = "ALVO (+" + DoubleToString(currentTargetPct, 1) + "%" + zonaAlvo + "): " + sTargetVal;
           
-          // Linha 2: PROGRESSO │ Lucro e Barra de Progresso
+          // Linha 2: PROGRESSO â”‚ Lucro e Barra de Progresso
           double clampedProgress = MathMin(100.0, MathMax(0.0, progressPct));
           int solidCount = (int)MathRound(clampedProgress / 10.0);
           if(solidCount < 0) solidCount = 0;
@@ -4275,10 +4287,10 @@ void DesenharPainel() {
        ObjectDelete(0, PANEL_PREFIX+"eq_cycle_bar_fill");
     }
 
-   // SEÇÃO VISÃO LOCAL
+   // SEÃ‡ÃƒO VISÃƒO LOCAL
    ObjectDelete(0, PANEL_PREFIX+"sep_glb_loc"); // Remove linha antiga
    cur+=10;
-   PSect("sec_loc", px, cur, pw, "VISÃO LOCAL (MOEDA ATUAL)", CLR_AMBER); cur+=20;
+   PSect("sec_loc", px, cur, pw, "VISÃƒO LOCAL (MOEDA ATUAL)", CLR_AMBER); cur+=20;
 
    // CARD LOCAL (MOEDA ATUAL)
    PRect("bg_loc",px+pad-2,cur,pw-(pad*2)+4,110,C'22,26,35',CLR_LINE_SOFT,200,true); cur+=6;
@@ -4321,7 +4333,7 @@ void DesenharPainel() {
    cur+=18;
 
    // LUCRO ACUMULADO POR MOEDA
-   ObjectDelete(0, PANEL_PREFIX+"sym_hist_bg"); // Garante a deleção do box antigo
+   ObjectDelete(0, PANEL_PREFIX+"sym_hist_bg"); // Garante a deleÃ§Ã£o do box antigo
    string sBrlHLoc = (g_TaxaBRLAtual>0) ? "  [R$ " + DoubleToString(g_HistLucroSymbol*fatBRL, 2) + "]" : "";
    PLabel("sym_hist_tit",lx,cur,"LUCRO LOCAL"+sBrlHLoc,CLR_TXT_LABEL,8);
    color txSym = g_HistLucroSymbol>=0 ? C'0,200,83' : C'255,82,82';
@@ -4348,9 +4360,9 @@ void DesenharPainel() {
       cd_clr = (cd_sec > 600) ? CLR_AMBER : C'255,82,82';
    }
 
-   // SEÇÃO STATUS DO MERCADO
+   // SEÃ‡ÃƒO STATUS DO MERCADO
    cur+=10;
-   PSect("sec_mkt", px, cur, pw, "STATUS E CONDIÇÕES DO MERCADO", CLR_TEAL); cur+=20;
+   PSect("sec_mkt", px, cur, pw, "STATUS E CONDIÃ‡Ã•ES DO MERCADO", CLR_TEAL); cur+=20;
    PRect("bg_mkt",px+pad-2,cur,pw-(pad*2)+4,38,CLR_BG_CARD,CLR_LINE_SOFT,200,true); cur+=4;
    
    bool sos_act = (InpAtivarHedgeParcial && (g_BuyTotal>=InpNivelHedgeParcial || g_SellTotal>=InpNivelHedgeParcial)) || (InpAtivarDinBreakEven && (g_BuyTotal>=InpNivelBreakEven || g_SellTotal>=InpNivelBreakEven));
@@ -4412,12 +4424,12 @@ void DesenharPainel() {
       cur+=6;
 
       // PM e Volume na mesma linha com posicoes fixas
-      PLabel("buy_pm_lbl",lx+6,cur,"Preço Médio:",CLR_TXT_DIM,8);
+      PLabel("buy_pm_lbl",lx+6,cur,"PreÃ§o MÃ©dio:",CLR_TXT_DIM,8);
       PLabel("buy_pm_val",lx+80,cur,DoubleToString(g_BuyPrecoMedio,_Digits),CLR_AMBER,9,true);
       PLabel("buy_vol_lbl",lx+2+thm_w/2,cur,"Volume:",CLR_TXT_DIM,8);
       PLabelR("buy_vol_val",rx-6,cur,DoubleToString(g_BuyVolume,3)+" L",clrWhite,9,true); cur+=17;
 
-      // Lucro — linha completa
+      // Lucro â€” linha completa
       double bpl=g_BuyLucro+g_BuySwap;
       PLabel("buy_lucro_lbl",lx+6,cur,"LUCRO ATUAL",CLR_TXT_DIM,8);
       string bplSig = bpl>=0?"+":"";
@@ -4434,15 +4446,15 @@ void DesenharPainel() {
       PLabelR("buy_alvo_usd",rx-6,cur,buyUSDStr,C'0,200,83',9,true);
       cur+=16;
 
-      // SmartTarget — linha compacta + botão ? para expandir
+      // SmartTarget â€” linha compacta + botÃ£o ? para expandir
       if(InpSTHabilitado) {
          double stBal = AccountInfoDouble(ACCOUNT_BALANCE);
          double stPnl = g_BuyLucro + g_BuySwap;
          double stDD  = (stBal > 0 && stPnl < 0) ? (MathAbs(stPnl) / stBal) * 100.0 : 0.0;
          string stZone; color stClr;
-         if(stDD >= InpSTDDSobreviv)     { stZone = "SOBREVIVÊNCIA"; stClr = C'255,60,60';  }
-         else if(stDD >= InpSTDDCritico) { stZone = "CRÍTICO";       stClr = CLR_RED;        }
-         else if(stDD >= InpSTDDPressao) { stZone = "PRESSÃO";       stClr = CLR_AMBER;      }
+         if(stDD >= InpSTDDSobreviv)     { stZone = "SOBREVIVÃŠNCIA"; stClr = C'255,60,60';  }
+         else if(stDD >= InpSTDDCritico) { stZone = "CRÃTICO";       stClr = CLR_RED;        }
+         else if(stDD >= InpSTDDPressao) { stZone = "PRESSÃƒO";       stClr = CLR_AMBER;      }
          else                            { stZone = "NORMAL";         stClr = CLR_TEAL;       }
          string stVal = (g_BuyTPEfetivo > 0) ? DoubleToString(g_BuyTPEfetivo, 2) + " USC" : "--";
          PLabel("buy_st_lbl",lx+6,cur,"SmartTarget:",CLR_TXT_DIM,8);
@@ -4497,7 +4509,7 @@ void DesenharPainel() {
       cur+=7;
    }
 
-   // Grade inferior Buy — Compras sempre na paleta Verde/Amarela para nao confundir com Venda
+   // Grade inferior Buy â€” Compras sempre na paleta Verde/Amarela para nao confundir com Venda
    bool isBuyLimGrd = (g_SGBloqueado && g_BuyTotal > 0 && (g_BuyLucro+g_BuySwap) < 0);
    color buyGradeClr = isBuyLimGrd ? C'0,255,128' : (g_BuyTotal >= InpMaxOrdens-1 ? CLR_AMBER : CLR_TEAL);
    PLabel("buy_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
@@ -4539,7 +4551,7 @@ void DesenharPainel() {
 
       cur+=6;
 
-      PLabel("sel_pm_lbl",lx+6,cur,"Preço Médio:",CLR_TXT_DIM,8);
+      PLabel("sel_pm_lbl",lx+6,cur,"PreÃ§o MÃ©dio:",CLR_TXT_DIM,8);
       PLabel("sel_pm_val",lx+80,cur,DoubleToString(g_SellPrecoMedio,_Digits),CLR_AMBER,9,true);
       PLabel("sel_vol_lbl",lx+2+thm_w/2,cur,"Volume:",CLR_TXT_DIM,8);
       PLabelR("sel_vol_val",rx-6,cur,DoubleToString(g_SellVolume,3)+" L",clrWhite,9,true); cur+=17;
@@ -4560,15 +4572,15 @@ void DesenharPainel() {
       PLabelR("sel_alvo_usd",rx-6,cur,selUSDStr,C'0,200,83',9,true);
       cur+=16;
 
-      // SmartTarget — linha compacta no cesto Sell (botão compartilhado com Buy)
+      // SmartTarget â€” linha compacta no cesto Sell (botÃ£o compartilhado com Buy)
       if(InpSTHabilitado) {
          double stBalS = AccountInfoDouble(ACCOUNT_BALANCE);
          double stPnlS = g_SellLucro + g_SellSwap;
          double stDDS  = (stBalS > 0 && stPnlS < 0) ? (MathAbs(stPnlS) / stBalS) * 100.0 : 0.0;
          string stZoneS; color stClrS;
-         if(stDDS >= InpSTDDSobreviv)      { stZoneS = "SOBREVIVÊNCIA"; stClrS = C'255,60,60';  }
-         else if(stDDS >= InpSTDDCritico)  { stZoneS = "CRÍTICO";       stClrS = CLR_RED;        }
-         else if(stDDS >= InpSTDDPressao)  { stZoneS = "PRESSÃO";       stClrS = CLR_AMBER;      }
+         if(stDDS >= InpSTDDSobreviv)      { stZoneS = "SOBREVIVÃŠNCIA"; stClrS = C'255,60,60';  }
+         else if(stDDS >= InpSTDDCritico)  { stZoneS = "CRÃTICO";       stClrS = CLR_RED;        }
+         else if(stDDS >= InpSTDDPressao)  { stZoneS = "PRESSÃƒO";       stClrS = CLR_AMBER;      }
          else                              { stZoneS = "NORMAL";         stClrS = CLR_TEAL;       }
          string stValS = (g_SellTPEfetivo > 0) ? DoubleToString(g_SellTPEfetivo, 2) + " USC" : "--";
          PLabel("sel_st_lbl",lx+6,cur,"SmartTarget:",CLR_TXT_DIM,8);
@@ -4620,7 +4632,7 @@ void DesenharPainel() {
       cur+=7;
    }
 
-   // Grade inferior Sell — Vendas sempre na paleta Vermelha/Laranja
+   // Grade inferior Sell â€” Vendas sempre na paleta Vermelha/Laranja
    bool isSelLimGrd = (g_SGBloqueado && g_SellTotal > 0 && (g_SellLucro+g_SellSwap) < 0);
    color selGradeClr = isSelLimGrd ? CLR_RED : (g_SellTotal >= InpMaxOrdens-1 ? C'255,100,50' : C'180,60,60');
    PLabel("sel_grl",lx,cur,"GRADE:",CLR_TXT_DIM,8,true);
@@ -4642,19 +4654,19 @@ void DesenharPainel() {
    PButton("btn_pause",px+pad-2,cur,bwfull,24,g_BotPaused?"[>] RETOMAR":"[||] PAUSAR",
            g_BotPaused?CLR_TEAL_DIM:CLR_BG_SECTION,g_BotPaused?CLR_TEAL:CLR_TXT_PRIMARY); cur+=30;
    
-   ObjectDelete(0, PANEL_PREFIX + "btn_sos_zero"); // Deleta botao sos antigo do rodapé
+   ObjectDelete(0, PANEL_PREFIX + "btn_sos_zero"); // Deleta botao sos antigo do rodapÃ©
    
    PButton("btn_l0",px+pad-2,cur,bw,20,"LINHAS: VISIVEIS",g_LinhasModo==0?CLR_TEAL_DIM:CLR_BG_CARD,g_LinhasModo==0?CLR_TEAL:CLR_TXT_DIM);
    PButton("btn_l1",px+pad+bw+2,cur,bw,20,"LINHAS: OCULTAS",g_LinhasModo==1?CLR_RED_DIM:CLR_BG_CARD,g_LinhasModo==1?CLR_RED:CLR_TXT_DIM); cur+=22;
-   PButton("btn_analise",px+pad-2,cur,bwfull,20,g_ModoAnalise?"[ ANÁLISE ATIVA ]":"[ ANÁLISE DE MERCADO (OFF) ]",g_ModoAnalise?C'15,35,75':CLR_BG_CARD,g_ModoAnalise?CLR_BLUE:CLR_TXT_DIM); cur+=28;
+   PButton("btn_analise",px+pad-2,cur,bwfull,20,g_ModoAnalise?"[ ANÃLISE ATIVA ]":"[ ANÃLISE DE MERCADO (OFF) ]",g_ModoAnalise?C'15,35,75':CLR_BG_CARD,g_ModoAnalise?CLR_BLUE:CLR_TXT_DIM); cur+=28;
 
    //=======================================================  SECAO 7: ANALISE DE MERCADO (OPCIONAL)
    if(g_ModoAnalise) {
       string tfStr = StringSubstr(EnumToString(g_Ana_TF), 7);
-      PSect("s_ana", px, cur, pw, "ANÁLISE DE MERCADO [" + tfStr + "]", CLR_BLUE); cur+=16;
+      PSect("s_ana", px, cur, pw, "ANÃLISE DE MERCADO [" + tfStr + "]", CLR_BLUE); cur+=16;
 
       // Tendencia
-      PLabel("ana_t1", lx, cur, "TENDÊNCIA", CLR_BLUE, 8, true); cur+=14;
+      PLabel("ana_t1", lx, cur, "TENDÃŠNCIA", CLR_BLUE, 8, true); cur+=14;
       string adxTag = (g_Ana_ADX >= 25) ? " TRENDING" : " LATERAL";
       color  adxClr = (g_Ana_ADX >= 25) ? CLR_TEAL : CLR_TXT_LABEL;
       PRow("ana_adx", lx+4, rx, cur, "ADX (14):", DoubleToString(g_Ana_ADX,1) + adxTag, adxClr); cur+=14;
@@ -4680,7 +4692,7 @@ void DesenharPainel() {
 
       string stoTag = (g_Ana_Stoch > 80) ? " EXTREMO ALTA" : (g_Ana_Stoch < 20) ? " EXTREMO BAIXA" : " NEUTRO";
       color  stoClr = (g_Ana_Stoch > 80) ? CLR_RED : (g_Ana_Stoch < 20) ? CLR_TEAL : CLR_TXT_LABEL;
-      PRow("ana_stoch", lx+4, rx, cur, "Estocástico:", DoubleToString(g_Ana_Stoch,1) + stoTag, stoClr); cur+=20;
+      PRow("ana_stoch", lx+4, rx, cur, "EstocÃ¡stico:", DoubleToString(g_Ana_Stoch,1) + stoTag, stoClr); cur+=20;
 
       // Volatilidade
       PLabel("ana_v1", lx, cur, "VOLATILIDADE", CLR_BLUE, 8, true); cur+=14;
@@ -4688,13 +4700,13 @@ void DesenharPainel() {
       PRow("ana_atr", lx+4, rx, cur, "ATR:", DoubleToString(atv_pts,0) + " pts", CLR_TXT_PRIMARY); cur+=14;
 
       double bbW = (g_Ana_BB_Middle > 0) ? ((g_Ana_BB_Upper - g_Ana_BB_Lower) / g_Ana_BB_Middle * 100.0) : 0;
-      string bbwTag = (bbW < 0.3) ? " SQUEEZE" : " SAUDÁVEL";
+      string bbwTag = (bbW < 0.3) ? " SQUEEZE" : " SAUDÃVEL";
       color  bbwClr = (bbW < 0.3) ? CLR_RED : CLR_TEAL;
       PRow("ana_bbw", lx+4, rx, cur, "BB Width:", DoubleToString(bbW,2) + "%" + bbwTag, bbwClr); cur+=14;
 
       string bbpTag = (bid > g_Ana_BB_Upper) ? "ACIMA DA BANDA" : (bid < g_Ana_BB_Lower) ? "ABAIXO DA BANDA" : "MEIO BANDA";
       color  bbpClr = (bid > g_Ana_BB_Upper || bid < g_Ana_BB_Lower) ? CLR_AMBER : CLR_BLUE;
-      PRow("ana_bbp", lx+4, rx, cur, "BB Posição:", bbpTag, bbpClr); cur+=20;
+      PRow("ana_bbp", lx+4, rx, cur, "BB PosiÃ§Ã£o:", bbpTag, bbpClr); cur+=20;
 
       // Mercado Macro
       PLabel("ana_mm1", lx, cur, "MERCADO", CLR_BLUE, 8, true); cur+=14;
@@ -4713,7 +4725,7 @@ void DesenharPainel() {
       PGradeBar("ana_score_bar", lx+65, cur, thm_w-65, 8, 10, g_Ana_Score, CLR_BLUE, C'20,30,40');
       cur+=16;
 
-      string stTxt = (g_Ana_Score >= 8) ? "PRONTO PARA OPERAR" : (g_Ana_Score >= 5) ? "\x26A0 ATENÇÃO — AVALIE CONTEXTO" : "\x26D4 RISCO ALTO";
+      string stTxt = (g_Ana_Score >= 8) ? "PRONTO PARA OPERAR" : (g_Ana_Score >= 5) ? "\x26A0 ATENÃ‡ÃƒO â€” AVALIE CONTEXTO" : "\x26D4 RISCO ALTO";
       color  stBg  = (g_Ana_Score >= 8) ? C'20,60,35' : (g_Ana_Score >= 5) ? C'80,60,20' : C'60,20,20';
       color  stFg  = (g_Ana_Score >= 8) ? CLR_TEAL : (g_Ana_Score >= 5) ? CLR_AMBER : CLR_RED;
       PButton("ana_status", lx, cur, thm_w, 24, stTxt, stBg, stFg);
@@ -4906,7 +4918,7 @@ void DesenharLinhas() {
 }
 
 //===================================================================
-// MODO ANÁLISE DE MERCADO — FUNÇÕES AUXILIARES
+// MODO ANÃLISE DE MERCADO â€” FUNÃ‡Ã•ES AUXILIARES
 //===================================================================
 void IniciarHandlesAnalise() {
    g_Ana_TF = ChartPeriod(0);  // TF visivel no MT5 agora
@@ -5084,7 +5096,7 @@ void DesenharLinhasAnalise() {
    
    if(g_FR_H4_Sup > 0 && MathAbs(g_FR_H4_Sup - bid) <= max_dist) {
       bool isRes = (g_FR_H4_Sup > bid);
-      string lbl = (isRes ? "Resistência" : "Suporte") + " H4 (Fundo)";
+      string lbl = (isRes ? "ResistÃªncia" : "Suporte") + " H4 (Fundo)";
       AnaHLine("FR_SUP", g_FR_H4_Sup, C'120,80,220', STYLE_SOLID, 1, lbl);
       AnaLevelArrow("ARR_SUP_H4", g_FR_H4_Sup, isRes, C'120,80,220', 2);
       
@@ -5093,7 +5105,7 @@ void DesenharLinhasAnalise() {
    }
    if(g_FR_H4_Res > 0 && MathAbs(g_FR_H4_Res - bid) <= max_dist) {
       bool isRes = (g_FR_H4_Res > bid);
-      string lbl = (isRes ? "Resistência" : "Suporte") + " H4 (Topo)";
+      string lbl = (isRes ? "ResistÃªncia" : "Suporte") + " H4 (Topo)";
       AnaHLine("FR_RES", g_FR_H4_Res, C'220,160,0', STYLE_SOLID, 1, lbl);
       AnaLevelArrow("ARR_RES_H4", g_FR_H4_Res, isRes, C'220,160,0', 2);
       
@@ -5102,7 +5114,7 @@ void DesenharLinhasAnalise() {
    }
    if(g_FR_D1_Sup > 0 && MathAbs(g_FR_D1_Sup - bid) <= max_dist) {
       bool isRes = (g_FR_D1_Sup > bid);
-      string lbl = (isRes ? "Resistência" : "Suporte") + " D1 (Fundo)";
+      string lbl = (isRes ? "ResistÃªncia" : "Suporte") + " D1 (Fundo)";
       AnaHLine("FR_SUP_D1", g_FR_D1_Sup, C'80,50,180', STYLE_SOLID, 1, lbl);
       AnaLevelArrow("ARR_SUP_D1", g_FR_D1_Sup, isRes, C'80,50,180', 22);
       
@@ -5110,7 +5122,7 @@ void DesenharLinhasAnalise() {
    }
    if(g_FR_D1_Res > 0 && MathAbs(g_FR_D1_Res - bid) <= max_dist) {
       bool isRes = (g_FR_D1_Res > bid);
-      string lbl = (isRes ? "Resistência" : "Suporte") + " D1 (Topo)";
+      string lbl = (isRes ? "ResistÃªncia" : "Suporte") + " D1 (Topo)";
       AnaHLine("FR_RES_D1", g_FR_D1_Res, C'180,130,0', STYLE_SOLID, 1, lbl);
       AnaLevelArrow("ARR_RES_D1", g_FR_D1_Res, isRes, C'180,130,0', 22);
       
@@ -5184,13 +5196,13 @@ void DesenharLinhasAnalise() {
    color  diagClr = clrWhite;
    
    if(isMacroUp && isMicroUp) {
-       diagnostic = "FORÇA TOTAL (Macro e Micro: ALTA)";
+       diagnostic = "FORÃ‡A TOTAL (Macro e Micro: ALTA)";
        diagClr = clrLimeGreen;
    } else if(!isMacroUp && !isMicroUp) {
-       diagnostic = "FORÇA TOTAL (Macro e Micro: BAIXA)";
+       diagnostic = "FORÃ‡A TOTAL (Macro e Micro: BAIXA)";
        diagClr = clrRed;
    } else if(isMacroUp && !isMicroUp) {
-       diagnostic = "CORREÇÃO (Micro: Baixa | Macro: Alta)";
+       diagnostic = "CORREÃ‡ÃƒO (Micro: Baixa | Macro: Alta)";
        diagClr = clrGold;
    } else if(!isMacroUp && isMicroUp) {
        diagnostic = "REPIQUE (Micro: Alta | Macro: Baixa)";
@@ -5249,7 +5261,7 @@ void DesenharLegendaAnalise(int count, string &texts[], color &clrs[], string di
 }
 
 //===================================================================
-// INTEGRACAO WEB — Envia estado do robo para o Dashboard Orion
+// INTEGRACAO WEB â€” Envia estado do robo para o Dashboard Orion
 //===================================================================
 datetime g_WebUltimoEnvio = 0;
 
@@ -5350,6 +5362,12 @@ void ProcessarComandosServidor(string resp) {
          GlobalVariableSet("OrionHedge_Global_DDReached20", 0.0);
          GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
          GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
+
+    // Reseta contadores e gastos de cortes das defesas para o novo ciclo
+    DefinirCortesCount(0);
+    DefinirCortesGasto(0.0);
+    DefinirHPCortesCount(0);
+    DefinirHPCortesGasto(0.0);
          
          g_DealsCountCache = -1; // Forca recalculacao imediata
       }
@@ -5421,7 +5439,7 @@ void EnviarDadosWeb() {
       double tp   = (dir == "BUY") ? g_BuyAlvo : g_SellAlvo;
       double sl   = (dir == "BUY") ? g_BuyProxPreco : g_SellProxPreco;
       
-      // BUG #15: POSITION_IDENTIFIER substituído pelo nível real da grade a partir do comentário
+      // BUG #15: POSITION_IDENTIFIER substituÃ­do pelo nÃ­vel real da grade a partir do comentÃ¡rio
       string comment = PositionGetString(POSITION_COMMENT);
       int level = ObterNivelPosicao(comment, dir);
       
@@ -5510,7 +5528,7 @@ void EnviarDadosWeb() {
       }
    }
 
-   // BUG #3: Calcular saldo inicial do período de 30 dias subtraindo os lucros das transações no período
+   // BUG #3: Calcular saldo inicial do perÃ­odo de 30 dias subtraindo os lucros das transaÃ§Ãµes no perÃ­odo
    double totalProfitInWindow = 0.0;
    if(HistorySelect(timeLimit, TimeCurrent())) {
       int dealsTotal = HistoryDealsTotal();
@@ -5540,7 +5558,7 @@ void EnviarDadosWeb() {
    
    double runningBal = bal - totalProfitInWindow;
    
-   // Loop progressivo (cronológico) para aplicar o lucro e obter o saldo ao fim de cada dia
+   // Loop progressivo (cronolÃ³gico) para aplicar o lucro e obter o saldo ao fim de cada dia
    if(HistorySelect(timeLimit, TimeCurrent())) {
       int dealsTotal = HistoryDealsTotal();
       for(int i = 0; i < dealsTotal; i++) {
@@ -5577,7 +5595,7 @@ void EnviarDadosWeb() {
       }
    }
    
-   double lastKnownBalance = bal - totalProfitInWindow; // Caso não haja operações nos primeiros dias, começa do saldo inicial
+   double lastKnownBalance = bal - totalProfitInWindow; // Caso nÃ£o haja operaÃ§Ãµes nos primeiros dias, comeÃ§a do saldo inicial
    for(int k = 0; k < 30; k++) {
       if(dailyData[k].balance > 0.0) {
          lastKnownBalance = dailyData[k].balance;
@@ -5610,7 +5628,7 @@ void EnviarDadosWeb() {
    body += "\"sgBloqueado\":"  + (g_SGBloqueado ? "true" : "false")  + ",";
    body += "\"loteBase\":" + DoubleToString(g_LoteBase, 3) + ",";
    body += "\"takeProfitLimit\":" + DoubleToString(g_TakeProfitAtual, 2) + ",";
-   // BUG #7: brlRate compensando o fator centavo (multiplicando por 100 se for conta padrão)
+   // BUG #7: brlRate compensando o fator centavo (multiplicando por 100 se for conta padrÃ£o)
    double brlRateToSend = g_TaxaBRLAtual;
    string accCurr = AccountInfoString(ACCOUNT_CURRENCY);
    if(StringFind(accCurr, "USC") < 0 && StringFind(accCurr, "Cent") < 0 && StringFind(accCurr, "c") < 0) {
@@ -5712,7 +5730,7 @@ void EnviarDadosWeb() {
 // TIMER
 //===================================================================
 void OnTimer() {
-   // [v3.40 Senior Sync] Sincronizar variáveis globais do Ciclo de Equity entre todos os gráficos
+   // [v3.40 Senior Sync] Sincronizar variÃ¡veis globais do Ciclo de Equity entre todos os grÃ¡ficos
    if(GlobalVariableCheck("OrionHedge_Global_EqBase")) {
       double savedBase = GlobalVariableGet("OrionHedge_Global_EqBase");
       if(savedBase > 0) g_EquityCycleBaseBalance = savedBase;
@@ -5730,7 +5748,7 @@ void OnTimer() {
       g_DD_Reached20 = (GlobalVariableGet("OrionHedge_Global_DDReached20") > 0.5);
    }
 
-   // [v3.40] Atualizar taxa BRL dinâmica a cada 60 segundos
+   // [v3.40] Atualizar taxa BRL dinÃ¢mica a cada 60 segundos
    static datetime lastBRLUpdate = 0;
    if(TimeCurrent() - lastBRLUpdate >= 60) {
       g_TaxaBRLAtual = ObterTaxaBRLDinamica();
@@ -5743,7 +5761,7 @@ void OnTimer() {
    // Executar monitoramento S.O.S em baixa liquidez/sem ticks
    ProcessarAgendamentoSOS();
 
-   // Sincronizar pause global (somente ativação forçada via Pânico)
+   // Sincronizar pause global (somente ativaÃ§Ã£o forÃ§ada via PÃ¢nico)
    if(GlobalVariableCheck("OrionHedge_Global_BotPaused")) {
       if(GlobalVariableGet("OrionHedge_Global_BotPaused") > 0.5) {
          if(!g_BotPaused) {
@@ -5777,7 +5795,7 @@ void OnTimer() {
           GuardarResetTime("global", g_InicioHistorico);
           GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
           g_DealsCountCache = -1; // Forca recalcular
-          AddLog("Reset/Sincronização Global detectada. Data ajustada para: " + TimeToString(g_InicioHistorico, TIME_DATE|TIME_MINUTES));
+          AddLog("Reset/SincronizaÃ§Ã£o Global detectada. Data ajustada para: " + TimeToString(g_InicioHistorico, TIME_DATE|TIME_MINUTES));
        }
     }
 
@@ -5900,7 +5918,7 @@ void FecharCesto(bool isBuy) {
          }
       }
       
-      if(count == 0) break; // Todas as posições deste cesto fechadas!
+      if(count == 0) break; // Todas as posiÃ§Ãµes deste cesto fechadas!
       
       for(int i = 0; i < count; i++) {
          trade.PositionClose(tickets[i]);
@@ -5966,6 +5984,12 @@ void FecharTudo() {
    GlobalVariableSet("OrionHedge_Global_DDReached20", 0.0);
    GlobalVariableSet("OrionHedge_Global_TrailingActive", 0.0);
    GlobalVariableSet("OrionHedge_Global_PeakProfit", 0.0);
+
+    // Reseta contadores e gastos de cortes das defesas para o novo ciclo
+    DefinirCortesCount(0);
+    DefinirCortesGasto(0.0);
+    DefinirHPCortesCount(0);
+    DefinirHPCortesGasto(0.0);
    
    // Resets para evitar origens stale e logs enganosos de drawdown apos panico global
    g_BuyZoneOrigin       = 0;
@@ -6056,7 +6080,7 @@ void FecharLocal() {
    GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
    GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
    
-   // Pausar apenas este robô localmente
+   // Pausar apenas este robÃ´ localmente
    g_BotPaused = true;
    
    g_DealsCountCache = -1;
@@ -6129,7 +6153,7 @@ bool ObterDadosUltimaRecompra(bool &isBuyRescue, int &level, ulong &ticket, doub
 }
 
 //===================================================================
-// AUXILIAR: OBTER DADOS DA RECOMPRA ATIVA POR DIREÇÃO
+// AUXILIAR: OBTER DADOS DA RECOMPRA ATIVA POR DIREÃ‡ÃƒO
 //===================================================================
 bool ObterDadosRecompraDirecao(bool isBuyRescue, int &level, ulong &ticket, double &loss, double &lucroOposto, int &magicOposto) {
    level = isBuyRescue ? g_BuyNivelAtual : g_SellNivelAtual;
@@ -6143,7 +6167,7 @@ bool ObterDadosRecompraDirecao(bool isBuyRescue, int &level, ulong &ticket, doub
    int magicPerdedor = isBuyRescue ? g_MagicBuy : g_MagicSell;
    double precoExtremo = 0;
 
-   // Busca direta e robusta pela última recompra física (a que tem o preço mais extremo/desfavorável)
+   // Busca direta e robusta pela Ãºltima recompra fÃ­sica (a que tem o preÃ§o mais extremo/desfavorÃ¡vel)
    for(int i = PositionsTotal() - 1; i >= 0; i--) {
       ulong t = PositionGetTicket(i);
       if(t > 0 && PositionSelectByTicket(t)) {
@@ -6152,10 +6176,10 @@ bool ObterDadosRecompraDirecao(bool isBuyRescue, int &level, ulong &ticket, doub
             bool eMaisExtremo = false;
             
             if(isBuyRescue) {
-               // Para Compra: a última recompra é sempre a que tem o preço de abertura mais baixo
+               // Para Compra: a Ãºltima recompra Ã© sempre a que tem o preÃ§o de abertura mais baixo
                if(precoExtremo == 0 || p < precoExtremo) eMaisExtremo = true;
             } else {
-               // Para Venda: a última recompra é sempre a que tem o preço de abertura mais alto
+               // Para Venda: a Ãºltima recompra Ã© sempre a que tem o preÃ§o de abertura mais alto
                if(precoExtremo == 0 || p > precoExtremo) eMaisExtremo = true;
             }
             
@@ -6234,7 +6258,7 @@ void ExecutarFechamentoImediatoSOS(bool isBuyRescue, ulong ticket, int level, in
          SetSellSaidaZeroAtiva(false);
       }
    } else {
-      AddLog("[S.O.S IMEDIATO] Erro ao fechar posição de resgate " + dirPerdedora + " N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
+      AddLog("[S.O.S IMEDIATO] Erro ao fechar posiÃ§Ã£o de resgate " + dirPerdedora + " N" + IntegerToString(level) + ". Abortando fechamento do cesto oposto.");
    }
 }
 
@@ -6252,7 +6276,7 @@ void AbrirFecharPainelSOS(bool isBuyRescue) {
 }
 
 //===================================================================
-// HELPER PARA LINHAS COM CONVERSÃO BRL NO MINI PAINEL S.O.S
+// HELPER PARA LINHAS COM CONVERSÃƒO BRL NO MINI PAINEL S.O.S
 //===================================================================
 void PRowSOS(string id, int lx, int rx, int y, string lbl, double valUSC, color cv, bool isPronto = false) {
    double valBRL = isPronto ? 0.0 : UscToBrl(valUSC);
@@ -6277,7 +6301,7 @@ void PRow8(string id, int lx, int rx, int y, string lbl, string val, color cv) {
 }
 
 //===================================================================
-// MINI PAINEL S.O.S — CALCULO DE RESGATE ZERO A ZERO (FLUTUANTE)
+// MINI PAINEL S.O.S â€” CALCULO DE RESGATE ZERO A ZERO (FLUTUANTE)
 //===================================================================
 void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
    string pfx = isBuyRescue ? "sb_" : "ss_";
@@ -6327,7 +6351,7 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
       //=================================================== HEADER
       PRect(pfx+"hdr_bg",  x, cur, pw2, 32, CLR_BG_HEADER, -1, 200);
       PRect(pfx+"hdr_top", x, cur, pw2, 2, isScheduled?CLR_AMBER:CLR_RED, -1, 201); cur+=2;
-      PLabel(pfx+"hdr_title", x+pad2, cur+6, "S.O.S — "+dirPerdedora+" N"+IntegerToString(level), CLR_TXT_PRIMARY, 9, true);
+      PLabel(pfx+"hdr_title", x+pad2, cur+6, "S.O.S â€” "+dirPerdedora+" N"+IntegerToString(level), CLR_TXT_PRIMARY, 9, true);
       string statusTxt = isScheduled ? "AGENDADO - MONITORANDO" : (pronto ? "PRONTO PARA FECHAR" : "AGUARDANDO LUCRO");
       color statusClr = isScheduled ? CLR_AMBER : (pronto ? CLR_TEAL : CLR_RED);
       PLabel(pfx+"hdr_status", x+pad2, cur+19, statusTxt, statusClr, 7, true);
@@ -6338,7 +6362,7 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
       PSect(pfx+"sec_calc", x, cur, pw2, "CALCULO DO RESGATE", dirClr); cur+=16;
       ObjectDelete(0, PANEL_PREFIX+pfx+"r_buffer_l");
       ObjectDelete(0, PANEL_PREFIX+"R_"+pfx+"r_buffer_v");
-      PRowSOS(pfx+"r_perda", lx2, rx2, cur, "Prejuízo Real:", -absLoss, C'255,82,82'); cur+=14;
+      PRowSOS(pfx+"r_perda", lx2, rx2, cur, "PrejuÃ­zo Real:", -absLoss, C'255,82,82'); cur+=14;
       PRowSOS(pfx+"r_oposto", lx2, rx2, cur, "Lucro das Grades:", lucroOposto, lucroOposto>=0?C'0,200,83':C'255,82,82'); cur+=14;
       PRowSOS(pfx+"r_necessario", lx2, rx2, cur, "Meta p/ Fechar:", necessario, CLR_TXT_PRIMARY); cur+=14;
       PRowSOS(pfx+"r_falta", lx2, rx2, cur, "Falta p/ Resgate:", pronto?0.0:falta, pronto?CLR_TEAL:CLR_AMBER, pronto); cur+=18;
@@ -6368,7 +6392,7 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
          PLabel(pfx+"r_semcalc", lx2, cur, "Calculo indisponivel (volume/tick invalido)", CLR_TXT_DIM, 8); cur+=16;
       }
       PRow8(pfx+"r_vol", lx2, rx2, cur, "Volume Recompra:", DoubleToString(volRecompra,3)+" L", CLR_TXT_LABEL); cur+=14;
-      string recNumStr = IntegerToString(level) + "ª Recompra";
+      string recNumStr = IntegerToString(level) + "Âª Recompra";
       PRow8(pfx+"r_level_desc", lx2, rx2, cur, "Recompra a Fechar:", recNumStr, CLR_AMBER); cur+=18;
 
       //=================================================== BOTOES DE ACAO
@@ -6397,11 +6421,11 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
          }
          
          if(forceAguardando) {
-            PButton(pfx+"btn_forcar_zeragem", x+pad2-2, cur, bw2, 24, "⚠️ CONFIRMAR ZERAGEM EM 3s?", CLR_RED, CLR_TXT_PRIMARY); cur+=28;
+            PButton(pfx+"btn_forcar_zeragem", x+pad2-2, cur, bw2, 24, "âš ï¸ CONFIRMAR ZERAGEM EM 3s?", CLR_RED, CLR_TXT_PRIMARY); cur+=28;
          } else {
             double totalLossUSC = -absLoss + lucroOposto;
             double totalLossBRL = UscToBrl(totalLossUSC);
-            string btnText = "FORÇAR ZERAGEM  [" + FormatBRL(totalLossBRL) + "]";
+            string btnText = "FORÃ‡AR ZERAGEM  [" + FormatBRL(totalLossBRL) + "]";
             PButton(pfx+"btn_forcar_zeragem", x+pad2-2, cur, bw2, 22, btnText, CLR_RED_DIM, CLR_RED); cur+=26;
          }
       }
@@ -6415,7 +6439,7 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
       return;
    }
 
-   // === VERSAO SIMPLIFICADA (PASSO 4 — 3 BOTOES APENAS) ===
+   // === VERSAO SIMPLIFICADA (PASSO 4 â€” 3 BOTOES APENAS) ===
    if(!aberto) {
       LimparPainelSOS(pfx);
       outHeight = 0;
@@ -6435,7 +6459,7 @@ void DesenharPainelSOS(bool isBuyRescue, int x, int y, int &outHeight) {
 
    PRect(pfx+"hdr_bg",  x, cur, pw2, 32, CLR_BG_HEADER, -1, 200);
    PRect(pfx+"hdr_top", x, cur, pw2, 2, CLR_RED, -1, 201); cur+=2;
-   PLabel(pfx+"hdr_title", x+pad2, cur+6, "S.O.S — PAINEL DE EMERGENCIA", CLR_TXT_PRIMARY, 9, true);
+   PLabel(pfx+"hdr_title", x+pad2, cur+6, "S.O.S â€” PAINEL DE EMERGENCIA", CLR_TXT_PRIMARY, 9, true);
    PLabel(pfx+"hdr_sub", x+pad2, cur+19, "Fechar cestos manualmente", CLR_TXT_LABEL, 7);
    PButton(pfx+"btn_x", x+pw2-22, cur+5, 18, 18, "X", CLR_BG_CARD, CLR_TXT_LABEL);
    cur+=32+6;
@@ -6510,8 +6534,8 @@ void DesenharPainelReserva(int x, int y, int &outHeight) {
       cur+=4;
    }
 
-   //=================================================== AÇÕES DE CONTROLE
-   PSect(pfx+"sec_act", x, cur, pw2, "AÇÕES DE CONTROLE", CLR_BLUE); cur+=16;
+   //=================================================== AÃ‡Ã•ES DE CONTROLE
+   PSect(pfx+"sec_act", x, cur, pw2, "AÃ‡Ã•ES DE CONTROLE", CLR_BLUE); cur+=16;
    
    int bw2 = pw2-(pad2*2)+4;
    int halfBw = (bw2 - 4) / 2;
@@ -6530,9 +6554,9 @@ void DesenharPainelReserva(int x, int y, int &outHeight) {
    }
    
    if(forceAguardando) {
-      PButton(pfx+"btn_forcar_corte", x+pad2-2, cur, bw2, 24, "⚠️ CONFIRMAR AIRBAG EM 3s?", CLR_RED, CLR_TXT_PRIMARY); cur+=28;
+      PButton(pfx+"btn_forcar_corte", x+pad2-2, cur, bw2, 24, "âš ï¸ CONFIRMAR AIRBAG EM 3s?", CLR_RED, CLR_TXT_PRIMARY); cur+=28;
    } else {
-      PButton(pfx+"btn_forcar_corte", x+pad2-2, cur, bw2, 24, "FORÇAR CORTE (AIRBAG)", CLR_RED_DIM, CLR_RED); cur+=28;
+      PButton(pfx+"btn_forcar_corte", x+pad2-2, cur, bw2, 24, "FORÃ‡AR CORTE (AIRBAG)", CLR_RED_DIM, CLR_RED); cur+=28;
    }
    
    cur+=4;
@@ -6569,7 +6593,7 @@ void DesenharPainelSGInfo(int x, int y) {
    //=================================================== HEADER
    PRect(pfx+"hdr_bg",  x, cur, pw2, 32, CLR_BG_HEADER, -1, 200);
    PRect(pfx+"hdr_top", x, cur, pw2, 2, CLR_PURPLE, -1, 201); cur+=2;
-   PLabel(pfx+"hdr_title", x+pad2, cur+6, "SMART GATE — O QUE SIGNIFICA?", CLR_TXT_PRIMARY, 8, true);
+   PLabel(pfx+"hdr_title", x+pad2, cur+6, "SMART GATE â€” O QUE SIGNIFICA?", CLR_TXT_PRIMARY, 8, true);
    
    string statusTxt = g_SGBloqueado ? "BLOQUEADO" : "LIBERADO";
    color statusClr = g_SGBloqueado ? CLR_RED : C'0,200,83';
@@ -6580,7 +6604,7 @@ void DesenharPainelSGInfo(int x, int y) {
    //=================================================== SCORE ATUAL
    PSect(pfx+"sec_score", x, cur, pw2, "SCORE ATUAL", CLR_PURPLE); cur+=16;
    
-   PRow8(pfx+"r_score", lx2, rx2, cur, "Score / Mínimo:", DoubleToString(g_SGScoreAtual, 1) + " / " + DoubleToString(g_SGScoreMinimo, 1), CLR_TXT_PRIMARY); cur+=14;
+   PRow8(pfx+"r_score", lx2, rx2, cur, "Score / MÃ­nimo:", DoubleToString(g_SGScoreAtual, 1) + " / " + DoubleToString(g_SGScoreMinimo, 1), CLR_TXT_PRIMARY); cur+=14;
    
    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
    double pnlTotal = 0;
@@ -6599,7 +6623,7 @@ void DesenharPainelSGInfo(int x, int y) {
    string distTxt = DoubleToString(g_SGDistMultipl, 2) + "x";
    if(g_SGDistMultipl <= 1.001) distTxt += "  (normal)";
    else distTxt += "  (ampliado)";
-   PRow8(pfx+"r_dist", lx2, rx2, cur, "Distância grade:", distTxt, CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_dist", lx2, rx2, cur, "DistÃ¢ncia grade:", distTxt, CLR_TXT_LABEL); cur+=14;
    
    string loteTxt = DoubleToString(g_SGLoteFator * 100.0, 0) + "%";
    if(g_SGLoteFator >= 0.99) loteTxt += "  (lote cheio)";
@@ -6607,26 +6631,26 @@ void DesenharPainelSGInfo(int x, int y) {
    PRow8(pfx+"r_lote", lx2, rx2, cur, "Fator de lote:", loteTxt, CLR_TXT_LABEL); cur+=14;
 
    //=================================================== AS 4 CAMADAS
-   PSect(pfx+"sec_layers", x, cur, pw2, "AS 4 CAMADAS DE ANÁLISE", CLR_BLUE); cur+=16;
+   PSect(pfx+"sec_layers", x, cur, pw2, "AS 4 CAMADAS DE ANÃLISE", CLR_BLUE); cur+=16;
    
-   PRow8(pfx+"r_c1", lx2, rx2, cur, "C — Conta (saude $):", DoubleToString(g_SGScoreConta, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
-   PRow8(pfx+"r_c2", lx2, rx2, cur, "M — Mercado (spread/ATR):", DoubleToString(g_SGScoreMercado, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
-   PRow8(pfx+"r_c3", lx2, rx2, cur, "G — Grade (nivel/lote):", DoubleToString(g_SGScoreGrade, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
-   PRow8(pfx+"r_c4", lx2, rx2, cur, "T — Temporal (tempo em DD):", DoubleToString(g_SGScoreAdapt, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_c1", lx2, rx2, cur, "C â€” Conta (saude $):", DoubleToString(g_SGScoreConta, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_c2", lx2, rx2, cur, "M â€” Mercado (spread/ATR):", DoubleToString(g_SGScoreMercado, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_c3", lx2, rx2, cur, "G â€” Grade (nivel/lote):", DoubleToString(g_SGScoreGrade, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
+   PRow8(pfx+"r_c4", lx2, rx2, cur, "T â€” Temporal (tempo em DD):", DoubleToString(g_SGScoreAdapt, 0) + " / 100", CLR_TXT_LABEL); cur+=14;
 
-   //=================================================== O QUE ESTÁ ACONTECENDO
-   PSect(pfx+"sec_desc", x, cur, pw2, "O QUE ESTÁ ACONTECENDO?", CLR_AMBER); cur+=16;
+   //=================================================== O QUE ESTÃ ACONTECENDO
+   PSect(pfx+"sec_desc", x, cur, pw2, "O QUE ESTÃ ACONTECENDO?", CLR_AMBER); cur+=16;
    
-   string descTxt = "Tudo ok — operando normalmente.";
+   string descTxt = "Tudo ok â€” operando normalmente.";
    color descClr = C'0,200,83';
    if(g_SGBloqueado) {
-      descTxt = "Bloqueado — DD alto ou risco elevado.";
+      descTxt = "Bloqueado â€” DD alto ou risco elevado.";
       descClr = CLR_RED;
    } else if(g_SGScoreAtual < 60.0) {
-      descTxt = "Atenção — risco moderado, grade alerta.";
+      descTxt = "AtenÃ§Ã£o â€” risco moderado, grade alerta.";
       descClr = CLR_AMBER;
    } else if(g_SGLoteFator < 1.0 || g_SGDistMultipl > 1.0) {
-      descTxt = "Adaptativo — grade defensiva ativa.";
+      descTxt = "Adaptativo â€” grade defensiva ativa.";
       descClr = CLR_BLUE;
    }
    
@@ -6657,7 +6681,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
       return;
    }
    if(id==CHARTEVENT_OBJECT_CLICK) {
-      // Mini painel Fundo Reserva — fechar (X)
+      // Mini painel Fundo Reserva â€” fechar (X)
       if(sp == PANEL_PREFIX + "res_btn_x") {
          g_ReservaPanelAberto = false;
          LimparPainelReserva();
@@ -6665,7 +6689,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
       
-      // Botão Fundo Reserva no painel principal — abre/fecha
+      // BotÃ£o Fundo Reserva no painel principal â€” abre/fecha
       if(sp == PANEL_PREFIX + "btn_fundo_res") {
          g_ReservaPanelAberto = !g_ReservaPanelAberto;
          if(!g_ReservaPanelAberto) LimparPainelReserva();
@@ -6673,7 +6697,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
       
-      // Botão Smart Gate Info no painel principal — abre/fecha
+      // BotÃ£o Smart Gate Info no painel principal â€” abre/fecha
       if(sp == PANEL_PREFIX + "btn_sg_info" || sp == PANEL_PREFIX + "sg_btn_x") {
          g_SGInfoAberto = !g_SGInfoAberto;
          if(!g_SGInfoAberto) LimparPainelSGInfo();
@@ -6681,7 +6705,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
       
-      // Botão Defesa Info no painel principal — abre/fecha
+      // BotÃ£o Defesa Info no painel principal â€” abre/fecha
       if(sp == PANEL_PREFIX + "btn_defesa_info" || sp == PANEL_PREFIX + "def_btn_x") {
          g_DefesaInfoAberto = !g_DefesaInfoAberto;
          if(!g_DefesaInfoAberto) LimparPainelDefesaInfo();
@@ -6689,7 +6713,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
 
-      // Botão Smart Target Info — abre/fecha
+      // BotÃ£o Smart Target Info â€” abre/fecha
       if(sp == PANEL_PREFIX + "btn_st_info" || sp == PANEL_PREFIX + "sti_btn_x") {
          g_STInfoAberto = !g_STInfoAberto;
          if(!g_STInfoAberto) LimparPainelSTInfo();
@@ -6697,7 +6721,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
       
-      // Mini painel Fundo Reserva — injetar +50 USC
+      // Mini painel Fundo Reserva â€” injetar +50 USC
       if(sp == PANEL_PREFIX + "res_btn_add_50") {
          AlterarFundoReserva(50.0);
          AddLog("[FUNDO RESERVA] Injetado 50.00 USC manualmente. Novo Saldo: " + DoubleToString(ObterFundoReserva(), 2) + " USC");
@@ -6705,7 +6729,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
       
-      // Mini painel Fundo Reserva — retirar -50 USC
+      // Mini painel Fundo Reserva â€” retirar -50 USC
       if(sp == PANEL_PREFIX + "res_btn_sub_50") {
          double fundoVal = ObterFundoReserva();
          double valorSub = MathMin(50.0, fundoVal);
@@ -6715,7 +6739,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
       
-      // Mini painel Fundo Reserva — carga inicial global
+      // Mini painel Fundo Reserva â€” carga inicial global
       if(sp == PANEL_PREFIX + "res_btn_carga_init") {
          DefinirFundoReserva(0.0);
          CarregarFundoInicialGlobal();
@@ -6726,35 +6750,35 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
       
-      // Mini painel Fundo Reserva — zerar saldo
+      // Mini painel Fundo Reserva â€” zerar saldo
       if(sp == PANEL_PREFIX + "res_btn_zerar") {
          DefinirFundoReserva(0.0);
          DefinirCortesCount(0);
          DefinirCortesGasto(0.0);
-         AddLog("[FUNDO RESERVA] Saldo do fundo e estatísticas de corte zerados manualmente.");
+         AddLog("[FUNDO RESERVA] Saldo do fundo e estatÃ­sticas de corte zerados manualmente.");
          DesenharPainel(); ChartRedraw(0);
          return;
       }
       
-      // Mini painel Fundo Reserva — forçar corte (Airbag)
+      // Mini painel Fundo Reserva â€” forÃ§ar corte (Airbag)
       if(sp == PANEL_PREFIX + "res_btn_forcar_corte") {
          if(!g_AirbagForceConfirmar) {
             g_AirbagForceConfirmar = true;
             g_AirbagForceTimestamp = TimeCurrent();
-            AddLog("[AIRBAG] Clique novamente em 3s para confirmar a REDUÇÃO MANUAL DE LOTE!");
+            AddLog("[AIRBAG] Clique novamente em 3s para confirmar a REDUÃ‡ÃƒO MANUAL DE LOTE!");
          } else if(TimeCurrent() - g_AirbagForceTimestamp <= 3) {
             g_AirbagForceConfirmar = false;
-            AddLog("[AIRBAG] Executando redução manual forçada...");
+            AddLog("[AIRBAG] Executando reduÃ§Ã£o manual forÃ§ada...");
             ProcessarSmartTrimming(true);
          } else {
             g_AirbagForceConfirmar = false;
-            AddLog("[AIRBAG] Confirmação expirou. Redução cancelada.");
+            AddLog("[AIRBAG] ConfirmaÃ§Ã£o expirou. ReduÃ§Ã£o cancelada.");
          }
          DesenharPainel(); ChartRedraw(0);
          return;
       }
 
-      // Botão S.O.S na grade — abre/fecha o mini painel de cálculo
+      // BotÃ£o S.O.S na grade â€” abre/fecha o mini painel de cÃ¡lculo
       if(sp == PANEL_PREFIX + "btn_buy_sos") {
          AbrirFecharPainelSOS(true);
          DesenharPainel(); ChartRedraw(0);
@@ -6766,7 +6790,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
 
-      // S.O.S simplificado — fechar cesto Buy
+      // S.O.S simplificado â€” fechar cesto Buy
       if(sp == PANEL_PREFIX + "sb_btn_fechar_buy" || sp == PANEL_PREFIX + "ss_btn_fechar_buy") {
          FecharCesto(true);
          AtualizarCestoBuy();
@@ -6777,7 +6801,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
 
-      // S.O.S simplificado — fechar cesto Sell
+      // S.O.S simplificado â€” fechar cesto Sell
       if(sp == PANEL_PREFIX + "sb_btn_fechar_sell" || sp == PANEL_PREFIX + "ss_btn_fechar_sell") {
          FecharCesto(false);
          AtualizarCestoSell();
@@ -6788,7 +6812,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
 
-      // S.O.S simplificado — fechar tudo (panico)
+      // S.O.S simplificado â€” fechar tudo (panico)
       if(sp == PANEL_PREFIX + "sb_btn_fechar_tudo" || sp == PANEL_PREFIX + "ss_btn_fechar_tudo") {
          if(!g_PanicoAguardando) {
             g_PanicoAguardando = true;
@@ -6805,11 +6829,11 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
 
-      // Mini painel S.O.S — fechar (X)
+      // Mini painel S.O.S â€” fechar (X)
       if(sp == PANEL_PREFIX + "sb_btn_x") { g_SOSPanelBuyAberto=false; DesenharPainel(); ChartRedraw(0); return; }
       if(sp == PANEL_PREFIX + "ss_btn_x") { g_SOSPanelSellAberto=false; DesenharPainel(); ChartRedraw(0); return; }
 
-      // Mini painel S.O.S — cancelar agendamento
+      // Mini painel S.O.S â€” cancelar agendamento
       if(sp == PANEL_PREFIX + "sb_btn_cancelar") {
          SetBuySaidaZeroAtiva(false);
          AddLog("[S.O.S] Agendamento cancelado manualmente para COMPRA");
@@ -6823,7 +6847,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
 
-      // Mini painel S.O.S — agendar resgate automático
+      // Mini painel S.O.S â€” agendar resgate automÃ¡tico
       if(sp == PANEL_PREFIX + "sb_btn_agendar") {
          SetBuySaidaZeroAtiva(true);
          AddLog("[S.O.S] Agendamento ATIVADO para COMPRA");
@@ -6839,7 +6863,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          return;
       }
 
-      // Mini painel S.O.S — fechar agora (zero a zero imediato)
+      // Mini painel S.O.S â€” fechar agora (zero a zero imediato)
       if(sp == PANEL_PREFIX + "sb_btn_fechar_agora") {
          int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
          if(ObterDadosRecompraDirecao(true, level, ticket, loss, lucroOposto, magicOposto))
@@ -6856,12 +6880,12 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          DesenharPainel(); ChartRedraw(0);
          return;
       }
-      // Mini painel S.O.S — forçar zeragem
+      // Mini painel S.O.S â€” forÃ§ar zeragem
       if(sp == PANEL_PREFIX + "sb_btn_forcar_zeragem") {
          if(!g_SOSForceBuyAguardando) {
             g_SOSForceBuyAguardando = true;
             g_SOSForceBuyTimestamp = TimeCurrent();
-            AddLog("[S.O.S] Clique novamente em 3s para confirmar a ZERAGEM com prejuízo!");
+            AddLog("[S.O.S] Clique novamente em 3s para confirmar a ZERAGEM com prejuÃ­zo!");
          } else if(TimeCurrent() - g_SOSForceBuyTimestamp <= 3) {
             g_SOSForceBuyAguardando = false;
             int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
@@ -6870,7 +6894,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
             g_SOSPanelBuyAberto = false;
          } else {
             g_SOSForceBuyAguardando = false;
-            AddLog("[S.O.S] Confirmação expirou. Zeragem cancelada.");
+            AddLog("[S.O.S] ConfirmaÃ§Ã£o expirou. Zeragem cancelada.");
          }
          DesenharPainel(); ChartRedraw(0);
          return;
@@ -6879,7 +6903,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
          if(!g_SOSForceSellAguardando) {
             g_SOSForceSellAguardando = true;
             g_SOSForceSellTimestamp = TimeCurrent();
-            AddLog("[S.O.S] Clique novamente em 3s para confirmar a ZERAGEM com prejuízo!");
+            AddLog("[S.O.S] Clique novamente em 3s para confirmar a ZERAGEM com prejuÃ­zo!");
          } else if(TimeCurrent() - g_SOSForceSellTimestamp <= 3) {
             g_SOSForceSellAguardando = false;
             int level; ulong ticket; double loss; double lucroOposto; int magicOposto;
@@ -6888,7 +6912,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
             g_SOSPanelSellAberto = false;
          } else {
             g_SOSForceSellAguardando = false;
-            AddLog("[S.O.S] Confirmação expirou. Zeragem cancelada.");
+            AddLog("[S.O.S] ConfirmaÃ§Ã£o expirou. Zeragem cancelada.");
          }
          DesenharPainel(); ChartRedraw(0);
          return;
@@ -6977,24 +7001,24 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
             // Limpa a pausa global no terminal
             GlobalVariableSet("OrionHedge_Global_BotPaused", 0.0);
             
-            // Se retomar e não houver posições abertas na moeda, reseta estatísticas locais
+            // Se retomar e nÃ£o houver posiÃ§Ãµes abertas na moeda, reseta estatÃ­sticas locais
             if(g_BuyTotal == 0 && g_SellTotal == 0) {
                g_InicioHistoricoSymbol = TimeCurrent();
                GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
                GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
-               g_DealsCountCache = -1; // Força recalcular
-               AddLog("Retomando sem posições: Estatísticas Locais resetadas.");
+               g_DealsCountCache = -1; // ForÃ§a recalcular
+               AddLog("Retomando sem posiÃ§Ãµes: EstatÃ­sticas Locais resetadas.");
             }
             
-            // Se retomar e não houver posições abertas no EA todo, reseta estatísticas globais
+            // Se retomar e nÃ£o houver posiÃ§Ãµes abertas no EA todo, reseta estatÃ­sticas globais
             if(!TemPosicoesGlobais()) {
                g_InicioHistorico = TimeCurrent();
                GlobalVariableSet("OrionHedge_Global_ResetTime", (double)g_InicioHistorico);
                GlobalVariableSet("OrionHedge_ResetTime_" + _Symbol, (double)g_InicioHistoricoSymbol);
                GuardarResetTime("global", g_InicioHistorico);
                GuardarResetTime(_Symbol, g_InicioHistoricoSymbol);
-               g_DealsCountCache = -1; // Força recalcular
-               AddLog("Retomando sem posições: Estatísticas Globais resetadas.");
+               g_DealsCountCache = -1; // ForÃ§a recalcular
+               AddLog("Retomando sem posiÃ§Ãµes: EstatÃ­sticas Globais resetadas.");
             }
 
             g_DD_Reached10        = false;
@@ -7071,7 +7095,7 @@ void OnChartEvent(const int id,const long &lp,const double &dp,const string &sp)
              // Removido: ChartIndicatorAdd(0, 0, g_AnaHandleBB); para limpar a poluicao visual
              g_PreAnaliseLinhasModo = g_LinhasModo;  // [BUG-M2 FIX] Salva preferencia do usuario
              g_LinhasModo = 1; // oculta linhas trading durante analise
-             LimparLinhasAnalise(); // limpa resíduos de TF anterior
+             LimparLinhasAnalise(); // limpa resÃ­duos de TF anterior
              DesenharLinhasAnalise();
          } else {
              LimparIndicadoresAnalise();
@@ -7150,16 +7174,16 @@ void EnviarResumoPush() {
    double pnl_global = open_profit + open_swap;
    double pct_pnl = (balance > 0) ? (pnl_global / balance * 100.0) : 0.0;
    
-   // Lucro de hoje sincronizado com o painel gráfico
+   // Lucro de hoje sincronizado com o painel grÃ¡fico
    double lucroHoje = g_HistLucroHoje;
    double start_balance_telemetry = balance - g_HistLucroGlobal;
    double pctHoje = (balance > 0) ? (lucroHoje / balance * 100.0) : 0.0;
    
-   // Lucro Global Acumulado sincronizado com o painel gráfico
+   // Lucro Global Acumulado sincronizado com o painel grÃ¡fico
    double lucroGlobalTotal = g_HistLucroGlobal;
    double pctGlobalTotal = (start_balance_telemetry > 0) ? (lucroGlobalTotal / start_balance_telemetry * 100.0) : 0.0;
    
-   // Variação percentual do Patrimônio Líquido (Equity) sobre o Saldo
+   // VariaÃ§Ã£o percentual do PatrimÃ´nio LÃ­quido (Equity) sobre o Saldo
    double pct_patrimonio = (balance > 0) ? ((equity - balance) / balance * 100.0) : 0.0;
    double drawdown = (balance > 0) ? (MathAbs(pnl_global) / balance * 100.0) : 0.0;
    
@@ -7201,7 +7225,7 @@ void EnviarResumoPush() {
 }
 
 //===================================================================
-// MINI PAINEL DEFESA INFO — FLUTUANTE
+// MINI PAINEL DEFESA INFO â€” FLUTUANTE
 //===================================================================
 void DesenharPainelDefesaInfo(int x, int y) {
    string pfx = "def_";
@@ -7252,17 +7276,17 @@ void DesenharPainelDefesaInfo(int x, int y) {
    PRow8(pfx+"r_hp_gasto", lx2, rx2, cur, "Total Queimado:", FormatBRL(UscToBrl(hpGasto)) + " (" + DoubleToString(hpGasto, 1) + " USC)", CLR_TXT_LABEL); cur+=14;
 
    //=================================================== BREAK EVEN
-   PSect(pfx+"sec_be", x, cur, pw2, "BREAK EVEN DINÂMICO (ALT 2)", CLR_BLUE); cur+=16;
+   PSect(pfx+"sec_be", x, cur, pw2, "BREAK EVEN DINÃ‚MICO (ALT 2)", CLR_BLUE); cur+=16;
    
    string beStatus = InpAtivarDinBreakEven ? "Habilitado" : "Desabilitado";
    color beClr = InpAtivarDinBreakEven ? CLR_TXT_PRIMARY : CLR_TXT_DIM;
    PRow8(pfx+"r_be_status", lx2, rx2, cur, "Break Even:", beStatus, beClr); cur+=14;
 
-   string buyBeStatus = g_BuySaidaZeroAtiva ? "ATIVADO" : ((g_BuyTotal >= InpNivelBreakEven) ? "Aguardando DD" : "Aguardando Nível");
+   string buyBeStatus = g_BuySaidaZeroAtiva ? "ATIVADO" : ((g_BuyTotal >= InpNivelBreakEven) ? "Aguardando DD" : "Aguardando NÃ­vel");
    color buyBeClr = g_BuySaidaZeroAtiva ? CLR_RED : CLR_TXT_DIM;
    PRow8(pfx+"r_be_buy", lx2, rx2, cur, "SOS Buy (Zero a Zero):", buyBeStatus, buyBeClr); cur+=14;
 
-   string sellBeStatus = g_SellSaidaZeroAtiva ? "ATIVADO" : ((g_SellTotal >= InpNivelBreakEven) ? "Aguardando DD" : "Aguardando Nível");
+   string sellBeStatus = g_SellSaidaZeroAtiva ? "ATIVADO" : ((g_SellTotal >= InpNivelBreakEven) ? "Aguardando DD" : "Aguardando NÃ­vel");
    color sellBeClr = g_SellSaidaZeroAtiva ? CLR_RED : CLR_TXT_DIM;
    PRow8(pfx+"r_be_sell", lx2, rx2, cur, "SOS Sell (Zero a Zero):", sellBeStatus, sellBeClr); cur+=14;
 
@@ -7348,7 +7372,7 @@ void DesenharPainelSTInfo(int x, int y) {
    //=================================================== HEADER
    PRect(pfx+"hdr_bg",  x, cur, pw2, 32, CLR_BG_HEADER, -1, 200);
    PRect(pfx+"hdr_top", x, cur, pw2, 2, CLR_BLUE, -1, 201); cur+=2;
-   PLabel(pfx+"hdr_title", x+pad2, cur+6, "SMART TARGET — ALVO DINÂMICO", CLR_TXT_PRIMARY, 8, true);
+   PLabel(pfx+"hdr_title", x+pad2, cur+6, "SMART TARGET â€” ALVO DINÃ‚MICO", CLR_TXT_PRIMARY, 8, true);
 
    // Calcular DD e zona atual
    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
@@ -7363,9 +7387,9 @@ void DesenharPainelSTInfo(int x, int y) {
    double ddUsd = MathMax(0.0, -pnlTotal);
    double ddPct = (balance > 0) ? (ddUsd / balance) * 100.0 : 0.0;
    string stZone; color stClr;
-   if(ddPct >= InpSTDDSobreviv)     { stZone = "SOBREVIVÊNCIA"; stClr = C'255,60,60';  }
-   else if(ddPct >= InpSTDDCritico) { stZone = "CRÍTICO";       stClr = CLR_RED;        }
-   else if(ddPct >= InpSTDDPressao) { stZone = "PRESSÃO";       stClr = CLR_AMBER;      }
+   if(ddPct >= InpSTDDSobreviv)     { stZone = "SOBREVIVÃŠNCIA"; stClr = C'255,60,60';  }
+   else if(ddPct >= InpSTDDCritico) { stZone = "CRÃTICO";       stClr = CLR_RED;        }
+   else if(ddPct >= InpSTDDPressao) { stZone = "PRESSÃƒO";       stClr = CLR_AMBER;      }
    else                             { stZone = "NORMAL";         stClr = CLR_TEAL;       }
 
    PLabel(pfx+"hdr_status", x+pad2, cur+19, "Zona: " + stZone, stClr, 7, true);
@@ -7388,12 +7412,12 @@ void DesenharPainelSTInfo(int x, int y) {
    color cC = (ddPct >= InpSTDDCritico  && ddPct < InpSTDDSobreviv) ? CLR_RED   : CLR_TXT_DIM;
    color cS = (ddPct >= InpSTDDSobreviv) ? C'255,60,60' : CLR_TXT_DIM;
    PRow8(pfx+"r_zn", lx2, rx2, cur, "NORMAL  (DD<"+DoubleToString(InpSTDDPressao,0)+"%):",  DoubleToString(InpSTAlvoNormal,1)+"%  do saldo",  cN); cur+=14;
-   PRow8(pfx+"r_zp", lx2, rx2, cur, "PRESSÃO (DD<"+DoubleToString(InpSTDDCritico,0)+"%):",  DoubleToString(InpSTAlvoPressao,1)+"%  do saldo", cP); cur+=14;
-   PRow8(pfx+"r_zc", lx2, rx2, cur, "CRÍTICO (DD<"+DoubleToString(InpSTDDSobreviv,0)+"%):", DoubleToString(InpSTAlvoCritico,1)+"%  do saldo", cC); cur+=14;
+   PRow8(pfx+"r_zp", lx2, rx2, cur, "PRESSÃƒO (DD<"+DoubleToString(InpSTDDCritico,0)+"%):",  DoubleToString(InpSTAlvoPressao,1)+"%  do saldo", cP); cur+=14;
+   PRow8(pfx+"r_zc", lx2, rx2, cur, "CRÃTICO (DD<"+DoubleToString(InpSTDDSobreviv,0)+"%):", DoubleToString(InpSTAlvoCritico,1)+"%  do saldo", cC); cur+=14;
    PRow8(pfx+"r_zs", lx2, rx2, cur, "SOBREVIV (DD>"+DoubleToString(InpSTDDSobreviv,0)+"%):",DoubleToString(InpSTAlvoSobreviv,1)+"%  do saldo", cS); cur+=14;
 
    //=================================================== FLOOR
-   PSect(pfx+"sec_floor", x, cur, pw2, "PROTEÇÃO (PISO DE PERDA)", CLR_AMBER); cur+=16;
+   PSect(pfx+"sec_floor", x, cur, pw2, "PROTEÃ‡ÃƒO (PISO DE PERDA)", CLR_AMBER); cur+=16;
    PRow8(pfx+"r_fl1", lx2, rx2, cur, "Floor configurado:", DoubleToString(InpSTLimiteNegativo,1)+"%", CLR_TXT_PRIMARY); cur+=14;
    double floorUsc = balance * (InpSTLimiteNegativo / 100.0);
    double hardFloor = balance * (-5.0 / 100.0);
@@ -7407,6 +7431,7 @@ void DesenharPainelSTInfo(int x, int y) {
 }
 
 //+------------------------------------------------------------------+
-//  FIM — Orion_Hedge.mq5
-//  MODO HEDGE: 2 Cestos Simultaneos — USE SO EM DEMO/TESTADOR
+//  FIM â€” Orion_Hedge.mq5
+//  MODO HEDGE: 2 Cestos Simultaneos â€” USE SO EM DEMO/TESTADOR
 //+------------------------------------------------------------------+
+
