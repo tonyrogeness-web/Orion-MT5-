@@ -4760,7 +4760,7 @@ void DesenharPainel() {
    DesenharPainelDefesaInfo(sosX, defesaInfoY);
 
    //=======================================================  MINI PAINEL SMART TARGET INFO (FLUTUANTE)
-   int defesaInfoHeight = g_DefesaInfoAberto ? 180 : 0;
+   int defesaInfoHeight = g_DefesaInfoAberto ? 360 : 0;
    int stInfoY = defesaInfoY + defesaInfoHeight;
    DesenharPainelSTInfo(sosX, stInfoY);
 
@@ -7211,7 +7211,7 @@ void DesenharPainelDefesaInfo(int x, int y) {
    int pw2 = 260, pad2 = 10;
    int lx2 = x + pad2 + 4, rx2 = x + pw2 - pad2;
    int cur = y;
-   int panelHeight = 310;
+   int panelHeight = 360;
 
    PRect(pfx+"border", x-1, cur-1, pw2+2, panelHeight+2, CLR_LINE_HARD, CLR_LINE_HARD, 198);
    PRect(pfx+"bg",      x,   cur,   pw2,   panelHeight,   CLR_BG_BASE, -1, 199);
@@ -7263,6 +7263,33 @@ void DesenharPainelDefesaInfo(int x, int y) {
    string sellBeStatus = g_SellSaidaZeroAtiva ? "ATIVADO" : ((g_SellTotal >= InpNivelBreakEven) ? "Aguardando DD" : "Aguardando Nível");
    color sellBeClr = g_SellSaidaZeroAtiva ? CLR_RED : CLR_TXT_DIM;
    PRow8(pfx+"r_be_sell", lx2, rx2, cur, "SOS Sell (Zero a Zero):", sellBeStatus, sellBeClr); cur+=14;
+
+   //=================================================== SMART ESCAPE
+   PSect(pfx+"sec_se", x, cur, pw2, "SMART ESCAPE (ALT 3)", CLR_AMBER); cur+=16;
+   
+   string seStatus = InpSEHabilitado ? "Habilitado" : "Desabilitado";
+   color seClr = InpSEHabilitado ? CLR_TXT_PRIMARY : CLR_TXT_DIM;
+   PRow8(pfx+"r_se_status", lx2, rx2, cur, "Smart Escape:", seStatus, seClr); cur+=14;
+
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   double pnlTotal = 0;
+   for(int i = 0; i < PositionsTotal(); i++) {
+      ulong tk = PositionGetTicket(i);
+      if(!PositionSelectByTicket(tk)) continue;
+      long mag = PositionGetInteger(POSITION_MAGIC);
+      if(mag < InpMagicNumberBase || mag > InpMagicNumberBase + 999999) continue;
+      pnlTotal += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+   }
+   double ddUsd = MathMax(0.0, -pnlTotal);
+   double ddPct = (balance > 0) ? (ddUsd / balance) * 100.0 : 0.0;
+
+   string f1Status = !InpSEFase1Habilitado ? "Desabilitado" : ((ddPct >= 30.0 && ddPct < 38.0) ? "ATIVO (DD>=30%)" : "Aguardando DD");
+   color f1Clr = !InpSEFase1Habilitado ? CLR_TXT_DIM : ((ddPct >= 30.0 && ddPct < 38.0) ? CLR_AMBER : CLR_TXT_DIM);
+   PRow8(pfx+"r_se_f1", lx2, rx2, cur, "Fase 1 (DD 30-38%):", f1Status, f1Clr); cur+=14;
+
+   string f2Status = !InpSEFase2Habilitado ? "Desabilitado" : ((ddPct >= 38.0) ? "ATIVO (DD>=38%)" : "Aguardando DD");
+   color f2Clr = !InpSEFase2Habilitado ? CLR_TXT_DIM : ((ddPct >= 38.0) ? CLR_RED : CLR_TXT_DIM);
+   PRow8(pfx+"r_se_f2", lx2, rx2, cur, "Fase 2 (DD > 38%):", f2Status, f2Clr); cur+=14;
 
    //=================================================== COOLDOWN RESTANTE
    PSect(pfx+"sec_cd", x, cur, pw2, "COOLDOWN ANTI-CHASING", CLR_TEAL); cur+=16;
