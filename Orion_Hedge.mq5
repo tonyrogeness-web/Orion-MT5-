@@ -68,8 +68,6 @@ input double InpSGScoreBase        = 40.0;   // [SmartGate] Score minimo em DD z
 input double InpSGScoreFatorDD     = 300.0;  // [SmartGate] Quanto o score minimo sobe por % de DD
 input double InpSGDistFatorDD      = 4.0;    // [SmartGate] Multiplicador de distancia por % de DD
 input double InpSGLoteFatorDD      = 5.0;    // [SmartGate] Reducao de lote por % de DD
-input double InpSGDDAtencao        = 5.0;    // [SmartGate] DD% inicio zona amarela (atencao)
-input double InpSGDDCritico        = 20.0;   // [SmartGate] DD% inicio zona critica (bloqueio severo)
 input double InpSGPesoConta        = 0.35;   // [SmartGate] Peso camada risco de conta (0-1)
 input double InpSGPesoMercado      = 0.25;   // [SmartGate] Peso camada analise de mercado (0-1)
 input double InpSGPesoGrade        = 0.25;   // [SmartGate] Peso camada estado da grade (0-1)
@@ -969,37 +967,6 @@ void AtualizarHistoricoGlobal() {
    }
 }
 
-double CalcularTPSmartTarget(double tpBase) {
-   if(!InpSTHabilitado || tpBase <= 0) return tpBase;
-   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
-   if(balance <= 0) return tpBase;
-   double pnlTotal = 0;
-   for(int i = 0; i < PositionsTotal(); i++) {
-      ulong tk = PositionGetTicket(i);
-      if(!PositionSelectByTicket(tk)) continue;
-      long mag = PositionGetInteger(POSITION_MAGIC);
-      if(mag < InpMagicNumberBase || mag > InpMagicNumberBase + 999999) continue;
-      pnlTotal += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
-   }
-   double ddUsd = MathMax(0.0, -pnlTotal);
-   double ddPct = (ddUsd / balance) * 100.0;
-   double alvoPct;
-   if(ddPct >= InpSTDDSobreviv)      alvoPct = InpSTAlvoSobreviv;
-   else if(ddPct >= InpSTDDCritico)  alvoPct = InpSTAlvoCritico;
-   else if(ddPct >= InpSTDDPressao)  alvoPct = InpSTAlvoPressao;
-   else                               alvoPct = InpSTAlvoNormal;
-   double alvoUsc   = balance * (alvoPct / 100.0);
-   double floorUsc  = balance * (InpSTLimiteNegativo / 100.0);
-   double hardFloor = balance * (-5.0 / 100.0);
-   floorUsc = MathMax(floorUsc, hardFloor);
-   double tpFinal = MathMax(alvoUsc, floorUsc);
-   static double lastDDLog = -1;
-   if(MathAbs(ddPct - lastDDLog) >= 1.0) {
-      lastDDLog = ddPct;
-      AddLog("[SmartTarget] DD=" + DoubleToString(ddPct, 1) + "% -> Alvo=" + DoubleToString(tpFinal, 2) + " USC (base era " + DoubleToString(tpBase, 2) + ")");
-   }
-   return tpFinal;
-}
 
 double CalcularPrecoAlvo(double precoMedio, double volume, double swapTotal, bool isBuy, double tpEfetivo) {
    double tickV = SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
@@ -1058,7 +1025,7 @@ void AtualizarCestoBuy() {
          tpDinBuy = g_TakeProfitAtual * (g_BuyLoteInicial / g_LoteBase);
          tpBasBuy = g_TakeProfitBase  * (g_BuyLoteInicial / g_LoteBase);
       }
-      g_BuyTPEfetivo = CalcularTPSmartTarget(tpDinBuy);
+      g_BuyTPEfetivo = tpDinBuy;
       
       // Se filtro de noticia ativo e breakeven ativado, reduz o TP para empate (lucro simbolico de 10% do TP Base)
       if(g_NewsActive && InpBreakEvenDuringNews) {
@@ -1180,7 +1147,7 @@ void AtualizarCestoSell() {
          tpDinSell = g_TakeProfitAtual * (g_SellLoteInicial / g_LoteBase);
          tpBasSell = g_TakeProfitBase  * (g_SellLoteInicial / g_LoteBase);
       }
-      g_SellTPEfetivo = CalcularTPSmartTarget(tpDinSell);
+      g_SellTPEfetivo = tpDinSell;
       
       // Se filtro de noticia ativo e breakeven ativado, reduz o TP para empate (lucro simbolico de 10% do TP Base)
       if(g_NewsActive && InpBreakEvenDuringNews) {
@@ -1968,7 +1935,7 @@ void ProcessarSmartEscape(double ddPct) {
       lucros[0] = 0; lucros[1] = 0;
       int encontrados = 0;
 
-      for(int i = PositionsTotal() - 1; i >= 0 && encontrados < 2; i--) {
+      for(int i = PositionsTotal() - 1; i >= 0; i--) {
          ulong t = PositionGetTicket(i);
          if(!PositionSelectByTicket(t)) continue;
          if(PositionGetInteger(POSITION_MAGIC) != magicPerdedor) continue;
@@ -1977,7 +1944,7 @@ void ProcessarSmartEscape(double ddPct) {
          if(encontrados == 0 || pl < lucros[0]) {
             piores[1] = piores[0]; lucros[1] = lucros[0];
             piores[0] = t; lucros[0] = pl;
-         } else if(encontrados == 1 && pl < lucros[1]) {
+         } else if(encontrados == 1 || pl < lucros[1]) {
             piores[1] = t; lucros[1] = pl;
          }
          encontrados++;
