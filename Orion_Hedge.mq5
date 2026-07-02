@@ -136,6 +136,9 @@ input bool   InpSEHabilitado        = true;   // Ativar Smart Escape
 input bool   InpSEFase1Habilitado   = true;   // Ativar Fase 1 (DD 30-38%)
 input bool   InpSEFase2Habilitado   = true;   // Ativar Fase 2 (DD > 38%)
 input int    InpSECandlesFase1      = 20;     // Candles para detectar maxima (Fase 1)
+input double InpSEFase2LimiarBase   = 0.50;   // Fase 2: % minimo do prejuizo exigido em lucro do vencedor (DD 38-50%)
+input double InpSEFase2DDExtremo    = 50.0;   // Fase 2: DD% a partir do qual o limiar cai (zona extrema)
+input double InpSEFase2LimiarExtremo= 0.20;   // Fase 2: % minimo exigido em DD extremo (mais permissivo)
 
 input group "=== PROTECAO ANTI-FACA CAINDO (RECOMPRAS) ==="
 input bool            InpAtivarAntiFaca     = true;        // Ativar Gatilho Anti-Faca (Confirmacao)
@@ -1992,7 +1995,8 @@ void ProcessarSmartEscape(double ddPct) {
       if(PositionSelectByTicket(ticketAntigo))
          perdaOrdem = MathAbs(PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP));
 
-      if(lucroVencedor < perdaOrdem * 0.5) return;
+      double limiarFase2 = (ddPct >= InpSEFase2DDExtremo) ? InpSEFase2LimiarExtremo : InpSEFase2LimiarBase;
+      if(lucroVencedor < perdaOrdem * limiarFase2) return;
 
       AddLog("[SmartEscape F2] Fechando ordem mais antiga #" + IntegerToString(ticketAntigo) + " com lucro do vencedor=" + DoubleToString(lucroVencedor, 2) + " USC");
       trade.PositionClose(ticketAntigo);
