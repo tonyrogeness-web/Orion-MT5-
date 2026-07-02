@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                           Orion_Hedge.mq5                       |
 //|  ORION HEDGE — Grade COMPRA + VENDA Simultaneas (2 Cestos)       |
 //|  v3.40 HEDGE — TP Bidirecional | Cooldown | Validacao de Simbolo  |
@@ -5473,11 +5473,9 @@ void EnviarDadosWeb() {
                datetime dt = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
                
                bool isOrionDeal = false;
-               if(dt >= g_InicioHistorico) {
-                  isOrionDeal = true;
-               } else if(mag >= InpMagicNumberBase && mag <= InpMagicNumberBase + 999999) {
-                  isOrionDeal = true;
-               }
+                if(dt >= g_InicioHistorico) {
+                   isOrionDeal = true;
+                }
                
                if(isOrionDeal) {
                   double prof = HistoryDealGetDouble(ticket, DEAL_PROFIT);
@@ -5517,11 +5515,9 @@ void EnviarDadosWeb() {
                datetime dt = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
                
                bool isOrionDeal = false;
-               if(dt >= g_InicioHistorico) {
-                  isOrionDeal = true;
-               } else if(mag >= InpMagicNumberBase && mag <= InpMagicNumberBase + 999999) {
-                  isOrionDeal = true;
-               }
+                if(dt >= g_InicioHistorico) {
+                   isOrionDeal = true;
+                }
                
                if(isOrionDeal) {
                   double prof = HistoryDealGetDouble(ticket, DEAL_PROFIT);
@@ -5548,11 +5544,9 @@ void EnviarDadosWeb() {
                datetime dt = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
                
                bool isOrionDeal = false;
-               if(dt >= g_InicioHistorico) {
-                  isOrionDeal = true;
-               } else if(mag >= InpMagicNumberBase && mag <= InpMagicNumberBase + 999999) {
-                  isOrionDeal = true;
-               }
+                if(dt >= g_InicioHistorico) {
+                   isOrionDeal = true;
+                }
                
                if(isOrionDeal) {
                   double prof = HistoryDealGetDouble(ticket, DEAL_PROFIT);
