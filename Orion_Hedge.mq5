@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                           Orion_Hedge.mq5                       |
 //|  ORION HEDGE — Grade COMPRA + VENDA Simultaneas (2 Cestos)       |
 //|  v3.40 HEDGE — TP Bidirecional | Cooldown | Validacao de Simbolo  |
@@ -4189,7 +4189,7 @@ void DesenharPainel() {
     if(InpAtivarCicloEquity) {
        double profitNet = g_HistLucroGlobal + global_total;
        double pctNet = (g_EquityCycleBaseBalance > 0) ? (profitNet / g_EquityCycleBaseBalance * 100.0) : 0.0;
-       double currentTargetPct = InpMetaCicloEquityPct;
+       double currentTargetPct = CalcularMetaSmartTarget(dd_glb_pct);
        
        double progressPct = (currentTargetPct > 0) ? (pctNet / currentTargetPct * 100.0) : 0.0;
        color tClr = CLR_TEAL;
@@ -4214,6 +4214,14 @@ void DesenharPainel() {
        } else {
           double targetVal = g_EquityCycleBaseBalance * (1.0 + currentTargetPct / 100.0);
           string sBaseVal = "", sTargetVal = "";
+          string zonaAlvo = "";
+           if(InpSTHabilitado) {
+              if(dd_glb_pct >= InpSTDDSobreviv)      zonaAlvo = " Sobreviv.";
+              else if(dd_glb_pct >= InpSTDDCritico)  zonaAlvo = " Crítico";
+              else if(dd_glb_pct >= InpSTDDPressao)  zonaAlvo = " Pressão";
+              else                                   zonaAlvo = " Normal";
+           }
+           
           if(g_TaxaBRLAtual > 0) {
              sBaseVal = "R$ " + DoubleToString(g_EquityCycleBaseBalance * fatBRL, 2);
              sTargetVal = "R$ " + DoubleToString(targetVal * fatBRL, 2);
@@ -4223,7 +4231,7 @@ void DesenharPainel() {
           }
           
           string sLabel1 = "BASE  " + pipe + "  " + sBaseVal;
-          string sValue1 = "ALVO (+" + DoubleToString(currentTargetPct, 1) + "%): " + sTargetVal;
+          string sValue1 = "ALVO (+" + DoubleToString(currentTargetPct, 1) + "%" + zonaAlvo + "): " + sTargetVal;
           
           // Linha 2: PROGRESSO │ Lucro e Barra de Progresso
           double clampedProgress = MathMin(100.0, MathMax(0.0, progressPct));
